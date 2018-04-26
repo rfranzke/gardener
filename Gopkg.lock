@@ -105,8 +105,8 @@
     "pkg/types",
     "version"
   ]
-  revision = "e348b1aedd9167360c466ae98f7343d3e22281f8"
-  version = "v3.3.3"
+  revision = "fdde8705f5bf9a6d9dbfb0220caf2ee1ac816be8"
+  version = "v3.3.4"
 
 [[projects]]
   name = "github.com/coreos/go-semver"
@@ -136,12 +136,6 @@
   revision = "bc6354cbbc295e925e4c611ffe90c1f287ee54db"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/dustin/go-humanize"
-  packages = ["."]
-  revision = "bb3d318650d48840a39aa21a027c6630e198e626"
-
-[[projects]]
   name = "github.com/elazarl/go-bindata-assetfs"
   packages = ["."]
   revision = "30f82fa23fd844bd5bb1e5f216db87fd77b5eb43"
@@ -153,8 +147,8 @@
     ".",
     "log"
   ]
-  revision = "92cd0815dd1a028a6e69faee9757c7436238e252"
-  version = "v2.6.1"
+  revision = "2810ccc68e0ca445fa81ebfa03fbf70aca5c41ae"
+  version = "v2.7.0"
 
 [[projects]]
   name = "github.com/emicklei/go-restful-swagger12"
@@ -169,6 +163,18 @@
   version = "v3.0.0"
 
 [[projects]]
+  name = "github.com/gardener/machine-controller-manager"
+  packages = [
+    "pkg/apis/machine",
+    "pkg/apis/machine/v1alpha1",
+    "pkg/client/clientset/versioned",
+    "pkg/client/clientset/versioned/scheme",
+    "pkg/client/clientset/versioned/typed/machine/v1alpha1"
+  ]
+  revision = "8e8f11af7042b44e9b4764ba1b387f38af2c4261"
+  version = "0.4.0"
+
+[[projects]]
   name = "github.com/ghodss/yaml"
   packages = ["."]
   revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
@@ -177,8 +183,8 @@
 [[projects]]
   name = "github.com/go-ini/ini"
   packages = ["."]
-  revision = "ace140f73450505f33e8b8418216792275ae82a7"
-  version = "v1.35.0"
+  revision = "6529cf7c58879c08d927016dde4477f18a0634cb"
+  version = "v1.36.0"
 
 [[projects]]
   branch = "master"
@@ -423,7 +429,7 @@
     "internal/bitbucket.org/ww/goautoneg",
     "model"
   ]
-  revision = "d0f7cd64bda49e08b22ae8a730aa57aa0db125d6"
+  revision = "d811d2e9bf898806ecfb6ef6296774b13ffc314c"
 
 [[projects]]
   branch = "master"
@@ -479,7 +485,7 @@
     "ssh",
     "ssh/terminal"
   ]
-  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
+  revision = "719079de17cdc7d84bb2cd40301fc88f280eb809"
 
 [[projects]]
   branch = "master"
@@ -498,7 +504,7 @@
     "trace",
     "websocket"
   ]
-  revision = "d41e8174641f662c5a2d1c7a5f9e828788eb8706"
+  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
 
 [[projects]]
   branch = "master"
@@ -507,7 +513,7 @@
     "unix",
     "windows"
   ]
-  revision = "b126b21c05a91c856b027c16779c12e3bf236954"
+  revision = "bb9c189858d91f42db229b04d45a4c3d23a7662a"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -557,7 +563,7 @@
     "imports",
     "internal/fastwalk"
   ]
-  revision = "94b14834a20132093826ea5e2da5502a13908ad3"
+  revision = "c1def519f03ddf76f16b3e444ee1095d73afa01b"
 
 [[projects]]
   branch = "master"
@@ -1012,11 +1018,11 @@
     "pkg/util",
     "pkg/util/proto"
   ]
-  revision = "f442ecb314a3679150c272e2b9713d8deed5955d"
+  revision = "3a0c53868c9444e4224c3dd5dc2caa9b5107ff7b"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e06b588e47c61931a4f268f183efb4869c58f6ab8a5e6581d67ba1cd787ccc26"
+  inputs-digest = "1fb98327f33a498955e631142eebacabcdc42257e542239db9283705ffc0f554"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -12,23 +12,23 @@ ignored = [
   "github.com/spf13/afero/sftp"
 ]
 
-[[constraint]]
+[[override]]
   name = "k8s.io/api"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/apimachinery"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/apiserver"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/client-go"
   version = "kubernetes-1.10.1"
 
-[[constraint]]
+[[override]]
   name = "k8s.io/code-generator"
   version = "kubernetes-1.10.1"
 
@@ -63,6 +63,10 @@ ignored = [
 [[constraint]]
   name = "github.com/robfig/cron"
   revision = "2315d5715e36303a941d907f038da7f7c44c773b"
+
+[[constraint]]
+  name = "github.com/gardener/machine-controller-manager"
+  version = "0.4.0"
 
 # Dependencies for testing purposes only
 [[constraint]]
