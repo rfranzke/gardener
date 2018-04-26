@@ -47,6 +47,7 @@ type Operation struct {
 	APIServerIngresses  []corev1.LoadBalancerIngress
 	APIServerAddress    string
 	SeedNamespaceObject *corev1.Namespace
+	MachineDeployments  MachineDeployments
 }
 
 // MachineDeployment holds insformation about the name, class, replicas of a MachineDeployment
@@ -54,5 +55,9 @@ type Operation struct {
 type MachineDeployment struct {
 	Name      string
 	ClassName string
-	Replicas  int
+	Minimum   int
+	Maximum   int
 }
+
+// MachineDeployments is a list of machine deployments.
+type MachineDeployments []MachineDeployment

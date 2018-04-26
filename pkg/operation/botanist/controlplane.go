@@ -31,7 +31,7 @@ import (
 func (b *Botanist) DeployNamespace() error {
 	namespace, err := b.K8sSeedClient.CreateNamespace(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: b.Operation.Shoot.SeedNamespace,
+			Name: b.Shoot.SeedNamespace,
 			Labels: map[string]string{
 				common.GardenRole: "shoot",
 			},
@@ -48,7 +48,7 @@ func (b *Botanist) DeployNamespace() error {
 // garbage collection in Kubernetes will automatically delete all resources which belong to this namespace. This
 // comprises volumes and load balancers as well.
 func (b *Botanist) DeleteNamespace() error {
-	err := b.K8sSeedClient.DeleteNamespace(b.Operation.Shoot.SeedNamespace)
+	err := b.K8sSeedClient.DeleteNamespace(b.Shoot.SeedNamespace)
 	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) {
 		return nil
 	}
@@ -59,14 +59,14 @@ func (b *Botanist) DeleteNamespace() error {
 // kube-apiserver deployment (of the Shoot cluster). It waits until the load balancer is available and stores the address
 // on the Botanist's APIServerAddress attribute.
 func (b *Botanist) DeployKubeAPIServerService() error {
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "kube-apiserver-service"), "kube-apiserver-service", b.Operation.Shoot.SeedNamespace, nil, map[string]interface{}{
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", "kube-apiserver-service"), "kube-apiserver-service", b.Shoot.SeedNamespace, nil, map[string]interface{}{
 		"cloudProvider": b.Seed.CloudProvider,
 	})
 }
 
 // DeleteKubeAPIServer deletes the kube-apiserver deployment in the Seed cluster which holds the Shoot's control plane.
 func (b *Botanist) DeleteKubeAPIServer() error {
-	err := b.K8sSeedClient.DeleteDeployment(b.Operation.Shoot.SeedNamespace, common.KubeAPIServerDeploymentName)
+	err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.KubeAPIServerDeploymentName)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -77,7 +77,7 @@ func (b *Botanist) DeleteKubeAPIServer() error {
 // needs to be deleted before trying to remove any resources in the Shoot cluster, othwewise it will automatically recreate
 // them and block the infrastructure deletion.
 func (b *Botanist) DeleteKubeAddonManager() error {
-	err := b.K8sSeedClient.DeleteDeployment(b.Operation.Shoot.SeedNamespace, common.KubeAddonManagerDeploymentName)
+	err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.KubeAddonManagerDeploymentName)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
@@ -104,11 +104,60 @@ func (b *Botanist) DeployMachineControllerManager() error {
 		return err
 	}
 
-	if err := b.ApplyChartShoot(filepath.Join(common.ChartPath, "shoot-machines"), name, metav1.NamespaceSystem, nil, nil); err != nil {
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
+}
+
+// DeployClusterAutoscaler deploys the cluster-autoscaler into the Shoot namespace in the Seed cluster. It is responsible
+// for automatically scaling the worker pools of the Shoot.
+func (b *Botanist) DeployClusterAutoscaler() error {
+	if !b.Shoot.ClusterAutoscalerEnabled() {
+		return b.DeleteClusterAutoscaler()
+	}
+
+	var (
+		name        = "cluster-autoscaler"
+		workerPools = []map[string]interface{}{}
+		replicas    = 1
+	)
+
+	for _, worker := range b.MachineDeployments {
+		workerPools = append(workerPools, map[string]interface{}{
+			"name": worker.Name,
+			"min":  worker.Minimum,
+			"max":  worker.Maximum,
+		})
+	}
+
+	if b.Shoot.Hibernated {
+		replicas = 0
+	}
+
+	defaultValues := map[string]interface{}{
+		"podAnnotations": map[string]interface{}{
+			"checksum/secret-cluster-autoscaler": b.CheckSums[name],
+		},
+		"namespace": map[string]interface{}{
+			"uid": b.SeedNamespaceObject.UID,
+		},
+		"replicas":    replicas,
+		"workerPools": workerPools,
+	}
+
+	values, err := b.InjectImages(defaultValues, b.K8sSeedClient.Version(), map[string]string{name: name})
+	if err != nil {
 		return err
 	}
 
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Operation.Shoot.SeedNamespace, nil, values)
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-controlplane", "charts", name), name, b.Shoot.SeedNamespace, nil, values)
+}
+
+// DeleteClusterAutoscaler deletes the cluster-autoscaler deployment in the Seed cluster which holds the Shoot's control plane.
+func (b *Botanist) DeleteClusterAutoscaler() error {
+	err := b.K8sSeedClient.DeleteDeployment(b.Shoot.SeedNamespace, common.ClusterAutoscalerDeploymentName)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // DeploySeedMonitoring will install the Helm release "seed-monitoring" in the Seed clusters. It comprises components
@@ -233,21 +282,21 @@ func (b *Botanist) DeploySeedMonitoring() error {
 		values["alertmanager"].(map[string]interface{})["email_configs"] = emailConfigs
 	}
 
-	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-monitoring"), fmt.Sprintf("%s-monitoring", b.Operation.Shoot.SeedNamespace), b.Operation.Shoot.SeedNamespace, nil, values)
+	return b.ApplyChartSeed(filepath.Join(common.ChartPath, "seed-monitoring"), fmt.Sprintf("%s-monitoring", b.Shoot.SeedNamespace), b.Shoot.SeedNamespace, nil, values)
 }
 
 // DeleteSeedMonitoring will delete the monitoring stack from the Seed cluster to avoid phantom alerts
 // during the deletion process. More precisely, the Alertmanager and Prometheus StatefulSets will be
 // deleted.
 func (b *Botanist) DeleteSeedMonitoring() error {
-	err := b.K8sSeedClient.DeleteStatefulSet(b.Operation.Shoot.SeedNamespace, common.AlertManagerDeploymentName)
+	err := b.K8sSeedClient.DeleteStatefulSet(b.Shoot.SeedNamespace, common.AlertManagerDeploymentName)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	err = b.K8sSeedClient.DeleteStatefulSet(b.Operation.Shoot.SeedNamespace, common.PrometheusDeploymentName)
+	err = b.K8sSeedClient.DeleteStatefulSet(b.Shoot.SeedNamespace, common.PrometheusDeploymentName)
 	if apierrors.IsNotFound(err) {
 		return nil
 	}

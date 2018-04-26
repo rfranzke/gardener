@@ -34,7 +34,7 @@ func (b *AzureBotanist) GetMachineClassInfo() (classKind, classPlural, classChar
 // GenerateMachineConfig generates the configuration values for the cloud-specific machine class Helm chart. It
 // also generates a list of corresponding MachineDeployments. It returns the computed list of MachineClasses and
 // MachineDeployments.
-func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, []operation.MachineDeployment, error) {
+func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, operation.MachineDeployments, error) {
 	var (
 		resourceGroupName = "resourceGroupName"
 		vnetName          = "vnetName"
@@ -43,7 +43,7 @@ func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, []ope
 		outputVariables   = []string{resourceGroupName, vnetName, subnetName, availabilitySetID}
 		workers           = b.Shoot.Info.Spec.Cloud.Azure.Workers
 
-		machineDeployments = []operation.MachineDeployment{}
+		machineDeployments = operation.MachineDeployments{}
 		machineClasses     = []map[string]interface{}{}
 	)
 
@@ -92,7 +92,8 @@ func (b *AzureBotanist) GenerateMachineConfig() ([]map[string]interface{}, []ope
 		machineDeployments = append(machineDeployments, operation.MachineDeployment{
 			Name:      deploymentName,
 			ClassName: className,
-			Replicas:  worker.AutoScalerMax,
+			Minimum:   worker.AutoScalerMin,
+			Maximum:   worker.AutoScalerMax,
 		})
 
 		machineClassSpec["name"] = className

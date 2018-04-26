@@ -34,7 +34,7 @@ func (b *OpenStackBotanist) GetMachineClassInfo() (classKind, classPlural, class
 // GenerateMachineConfig generates the configuration values for the cloud-specific machine class Helm chart. It
 // also generates a list of corresponding MachineDeployments. The provided worker groups will be distributed over
 // the desired availability zones. It returns the computed list of MachineClasses and MachineDeployments.
-func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, []operation.MachineDeployment, error) {
+func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, operation.MachineDeployments, error) {
 	var (
 		networkID         = "network_id"
 		keyName           = "key_name"
@@ -44,7 +44,7 @@ func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, [
 		zones             = b.Shoot.Info.Spec.Cloud.OpenStack.Zones
 		zoneLen           = len(zones)
 
-		machineDeployments = []operation.MachineDeployment{}
+		machineDeployments = operation.MachineDeployments{}
 		machineClasses     = []map[string]interface{}{}
 	)
 
@@ -86,7 +86,8 @@ func (b *OpenStackBotanist) GenerateMachineConfig() ([]map[string]interface{}, [
 			machineDeployments = append(machineDeployments, operation.MachineDeployment{
 				Name:      deploymentName,
 				ClassName: className,
-				Replicas:  common.DistributeOverZones(zoneIndex, worker.AutoScalerMax, zoneLen),
+				Minimum:   common.DistributeOverZones(zoneIndex, worker.AutoScalerMin, zoneLen),
+				Maximum:   common.DistributeOverZones(zoneIndex, worker.AutoScalerMax, zoneLen),
 			})
 
 			machineClassSpec["name"] = className
