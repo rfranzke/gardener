@@ -1,1 +1,2 @@
 - change imagep ull policy to IfNotPresent
+- hybridbotanist/machines.go needs to handle cluster autoscaler disabled

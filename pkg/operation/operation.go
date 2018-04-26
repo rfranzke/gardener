@@ -28,6 +28,7 @@ import (
 	"github.com/gardener/gardener/pkg/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/operation/shoot"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
+	machineclientset "github.com/gardener/machine-controller-manager/pkg/client/clientset/versioned"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,10 +98,15 @@ func (o *Operation) InitializeSeedClients() error {
 	if err != nil {
 		return err
 	}
-	chartSeedRenderer := chartrenderer.New(k8sSeedClient)
+	// Create a MachineV1alpha1Client and the respective API group scheme for the Machine API group.
+	machineClientset, err := machineclientset.NewForConfig(k8sSeedClient.GetConfig())
+	if err != nil {
+		return err
+	}
+	k8sSeedClient.SetMachineClientset(machineClientset)
 
 	o.K8sSeedClient = k8sSeedClient
-	o.ChartSeedRenderer = chartSeedRenderer
+	o.ChartSeedRenderer = chartrenderer.New(k8sSeedClient)
 	return nil
 }
 
@@ -117,10 +123,9 @@ func (o *Operation) InitializeShootClients() error {
 	if err != nil {
 		return err
 	}
-	chartShootRenderer := chartrenderer.New(k8sShootClient)
 
 	o.K8sShootClient = k8sShootClient
-	o.ChartShootRenderer = chartShootRenderer
+	o.ChartShootRenderer = chartrenderer.New(k8sShootClient)
 	return nil
 }
 
@@ -154,7 +159,12 @@ func (o *Operation) GetSecretKeysOfRole(kind string) []string {
 // ReportShootProgress will update the last operation object in the Shoot manifest `status` section
 // by the current progress of the Flow execution.
 func (o *Operation) ReportShootProgress(progress int, currentFunctions string) {
-	o.Shoot.Info.Status.LastOperation.Description = "Currently executing " + currentFunctions
+	description := "Currently executing " + currentFunctions
+	if progress == 100 {
+		description = "Execution finished."
+	}
+
+	o.Shoot.Info.Status.LastOperation.Description = description
 	o.Shoot.Info.Status.LastOperation.Progress = progress
 	o.Shoot.Info.Status.LastOperation.LastUpdateTime = metav1.Now()
 
