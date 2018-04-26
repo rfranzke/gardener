@@ -685,15 +685,16 @@ func ValidateShootSpec(spec *garden.ShootSpec, fldPath *field.Path) field.ErrorL
 	allErrs := field.ErrorList{}
 
 	cloudPath := fldPath.Child("cloud")
-	provider, err := helper.DetermineCloudProviderInShoot(spec.Cloud)
-	if err != nil {
+	if _, err := helper.DetermineCloudProviderInShoot(spec.Cloud); err != nil {
 		allErrs = append(allErrs, field.Forbidden(cloudPath.Child("aws/azure/gcp/openstack/local"), "cloud section must only contain exactly one field of aws/azure/gcp/openstack/local"))
 		return allErrs
 	}
 
+	autoScalingEnabled := spec.Addons != nil && spec.Addons.ClusterAutoscaler != nil && spec.Addons.ClusterAutoscaler.Enabled
+
 	allErrs = append(allErrs, validateAddons(spec.Addons, fldPath.Child("addons"))...)
-	allErrs = append(allErrs, validateBackup(spec.Backup, provider, fldPath.Child("backup"))...)
-	allErrs = append(allErrs, validateCloud(spec.Cloud, fldPath.Child("cloud"))...)
+	allErrs = append(allErrs, validateBackup(spec.Backup, fldPath.Child("backup"))...)
+	allErrs = append(allErrs, validateCloud(spec.Cloud, autoScalingEnabled, fldPath.Child("cloud"))...)
 	allErrs = append(allErrs, validateDNS(spec.DNS, fldPath.Child("dns"))...)
 	allErrs = append(allErrs, validateKubernetes(spec.Kubernetes, fldPath.Child("kubernetes"))...)
 	allErrs = append(allErrs, validateMaintenance(spec.Maintenance, fldPath.Child("maintenance"))...)
@@ -750,7 +751,7 @@ func validateAddons(addons *garden.Addons, fldPath *field.Path) field.ErrorList 
 	return allErrs
 }
 
-func validateBackup(backup *garden.Backup, cloudProvider garden.CloudProvider, fldPath *field.Path) field.ErrorList {
+func validateBackup(backup *garden.Backup, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if backup == nil {
@@ -766,7 +767,7 @@ func validateBackup(backup *garden.Backup, cloudProvider garden.CloudProvider, f
 	return allErrs
 }
 
-func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
+func validateCloud(cloud garden.Cloud, autoScalingEnabled bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	workerNames := make(map[string]bool)
 
@@ -827,7 +828,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range aws.Workers {
 			idxPath := awsPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 20, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
@@ -881,13 +882,10 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range azure.Workers {
 			idxPath := azurePath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 35, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
-			if worker.AutoScalerMax != worker.AutoScalerMin {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("autoScalerMax"), "maximum value must be equal to minimum value"))
-			}
 			if workerNames[worker.Name] {
 				allErrs = append(allErrs, field.Duplicate(idxPath, worker.Name))
 			}
@@ -923,7 +921,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range gcp.Workers {
 			idxPath := gcpPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			allErrs = append(allErrs, validateWorkerVolumeSize(worker.VolumeSize, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerMinimumVolumeSize(worker.VolumeSize, 20, idxPath.Child("volumeSize"))...)
 			allErrs = append(allErrs, validateWorkerVolumeType(worker.VolumeType, idxPath.Child("volumeType"))...)
@@ -970,10 +968,7 @@ func validateCloud(cloud garden.Cloud, fldPath *field.Path) field.ErrorList {
 		}
 		for i, worker := range openStack.Workers {
 			idxPath := openStackPath.Child("workers").Index(i)
-			allErrs = append(allErrs, validateWorker(worker.Worker, idxPath)...)
-			if worker.AutoScalerMax != worker.AutoScalerMin {
-				allErrs = append(allErrs, field.Forbidden(idxPath.Child("autoScalerMax"), "maximum value must be equal to minimum value"))
-			}
+			allErrs = append(allErrs, validateWorker(worker.Worker, autoScalingEnabled, idxPath)...)
 			if workerNames[worker.Name] {
 				allErrs = append(allErrs, field.Duplicate(idxPath, worker.Name))
 			}
@@ -1216,7 +1211,7 @@ func validateMaintenance(maintenance *garden.Maintenance, fldPath *field.Path) f
 	return allErrs
 }
 
-func validateWorker(worker garden.Worker, fldPath *field.Path) field.ErrorList {
+func validateWorker(worker garden.Worker, autoScalingEnabled bool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	allErrs = append(allErrs, validateDNS1123Subdomain(worker.Name, fldPath.Child("name"))...)
@@ -1235,6 +1230,9 @@ func validateWorker(worker garden.Worker, fldPath *field.Path) field.ErrorList {
 	}
 	if worker.AutoScalerMax < worker.AutoScalerMin {
 		allErrs = append(allErrs, field.Forbidden(fldPath.Child("autoScalerMax"), "maximum value must not be less or equal than minimum value"))
+	}
+	if !autoScalingEnabled && worker.AutoScalerMin != worker.AutoScalerMax {
+		allErrs = append(allErrs, field.Forbidden(fldPath.Child("autoScalerMin/autoScalerMax"), "maximum value must be equal to minimum value if cluster autoscaler addon is disabled"))
 	}
 
 	return allErrs
