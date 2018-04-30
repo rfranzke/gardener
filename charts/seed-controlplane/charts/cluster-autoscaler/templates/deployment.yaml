@@ -39,16 +39,18 @@ spec:
         - --nodes={{ $pool.min }}:{{ $pool.max }}:{{ $.Release.Namespace }}.{{ $pool.name }}
         {{- end }}
         - --stderrthreshold=info
-        - --scale-down-unneeded-time=20s
-        - --skip-nodes-with-system-pods=false
-        - --skip-nodes-with-local-storage=false
-        - --scale-down-delay-after-add=20s
-        - --scale-down-delay-after-failure=20s
+        - --scale-down-unneeded-time=2m # TODO: change to default
+        - --skip-nodes-with-system-pods=false #TODO: change to default
+        - --skip-nodes-with-local-storage=false #TODO: change to default
+        - --scale-down-delay-after-add=2m # TODO: change to default
+        - --scale-down-delay-after-failure=2m # TODO: change to default
         - --expander=least-waste
         - --v=5
         env:
         - name: CONTROL_NAMESPACE
           value: {{ .Release.Namespace }}
+        - name: TARGET_KUBECONFIG
+          value: "/var/lib/cluster-autoscaler/kubeconfig"
         resources:
           limits:
             cpu: 100m

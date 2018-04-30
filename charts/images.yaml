@@ -18,7 +18,7 @@ images:
   tag: "0.4.0"
 - name: cluster-autoscaler
   repository: eu.gcr.io/gardener-project/gardener/autoscaler/cluster-autoscaler
-  tag: dev
+  tag: 0.2-dev
 - name: kube-addon-manager
   repository: k8s.gcr.io/kube-addon-manager
   tag: v8.6
