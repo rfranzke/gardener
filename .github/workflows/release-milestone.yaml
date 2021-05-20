@@ -11,12 +11,17 @@ jobs:
     name: Check if release milestone exists
     runs-on: ubuntu-latest
     steps:
+    - id: version
+      run: |
+        version=`cat ./VERSION`
+        echo "::set-output name=version::$version"
+
     - name: Block merge if milestone is missing
       uses: actions/github-script@v4
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          const version = await fs.readFile('VERSION', 'utf8');
+          const version = ${{ steps.version.outputs.version }};
           const nextMinorRegex = /^v[0-9]+\.[0-9]+\.0-dev/gmi;
 
           let match = nextMinorRegex.exec(version);
