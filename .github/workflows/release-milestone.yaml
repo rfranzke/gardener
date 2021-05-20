@@ -50,10 +50,13 @@ jobs:
           for (const milestone of milestones.data) {
             core.info("processing " + milestone.title);
             if (milestone.title != nextMinorVersion) {
+              core.info("skipping");
               continue;
             }
 
             // milestone found, check if PR is associated
+            console.log(context);
+            console.log(context.issue);
             if (context.issue.milestone == null && context.issue.milestone.title == null) {
               core.setFailed('milestone missing - cannot merge');
               return
