@@ -17,15 +17,13 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const version = await fs.readFile('VERSION', 'utf8');
-          const nextMinorVersion = ${{ steps.version.outputs.version }};
           const nextMinorRegex = /^v[0-9]+\.[0-9]+\.0-dev/gmi;
 
-          let match = nextMinorRegex.exec(nextMinorVersion);
+          let match = nextMinorRegex.exec(version);
           if (match == null) {
             core.info('VERSION does not indicate that the next version is a new minor release');
             return;
           }
-
           const nextMinorVersion = match[1];
 
           const milestones = await github.issues.listMilestones({
@@ -33,7 +31,7 @@ jobs:
             repo: context.repo.repo,
             state: 'open',
             sort: 'due_on',
-            direction: 'desc',
+            direction: 'desc'
           });
 
           for (const milestone of milestones.data) {
