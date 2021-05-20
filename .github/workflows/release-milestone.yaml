@@ -34,6 +34,10 @@ jobs:
             return;
           }
           const nextMinorVersion = match[1];
+          
+          // TODO
+          core.info(version);
+          core.info(nextMinorVersion);
 
           const milestones = await github.issues.listMilestones({
             owner: context.repo.owner,
@@ -44,6 +48,7 @@ jobs:
           });
 
           for (const milestone of milestones.data) {
+            core.info("processing " + milestone.title);
             if (milestone.title != nextMinorVersion) {
               continue;
             }
