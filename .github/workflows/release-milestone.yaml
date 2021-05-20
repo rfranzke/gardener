@@ -50,6 +50,7 @@ jobs:
           console.log(context);
           console.log(context.issue);
           console.log(context.issue.milestone);
+          console.log(context.payload.pull_request.milestone);
       
           for (const milestone of milestones.data) {
             core.info("processing " + milestone.title);
