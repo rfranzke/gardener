@@ -34,10 +34,6 @@ jobs:
             return;
           }
           const nextMinorVersion = match[1];
-          
-          // TODO
-          core.info(version);
-          core.info(nextMinorVersion);
 
           const milestones = await github.issues.listMilestones({
             owner: context.repo.owner,
@@ -46,21 +42,15 @@ jobs:
             sort: 'due_on',
             direction: 'desc'
           });
-          
-          console.log(context);
-          console.log(context.issue);
-          console.log(context.issue.milestone);
-          console.log(context.payload.pull_request.milestone);
-      
+    
           for (const milestone of milestones.data) {
             core.info("processing " + milestone.title);
             if (milestone.title != nextMinorVersion) {
-              core.info("skipping");
               continue;
             }
 
             // milestone found, check if PR is associated
-            if (context.issue.milestone == null || context.issue.milestone.title == null) {
+            if (context.payload.pull_request.milestone == null) {
               core.setFailed('milestone missing - cannot merge');
               return
             }
