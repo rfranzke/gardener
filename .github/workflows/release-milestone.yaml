@@ -55,9 +55,7 @@ jobs:
             }
 
             // milestone found, check if PR is associated
-            console.log(context);
-            console.log(context.issue);
-            if (context.issue.milestone == null && context.issue.milestone.title == null) {
+            if (context.issue.milestone == null || context.issue.milestone.title == null) {
               core.setFailed('milestone missing - cannot merge');
               return
             }
