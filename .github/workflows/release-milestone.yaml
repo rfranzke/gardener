@@ -46,6 +46,9 @@ jobs:
             sort: 'due_on',
             direction: 'desc'
           });
+          
+          core.info(context.issue);
+          core.info(context.pull_request);
 
           for (const milestone of milestones.data) {
             core.info("processing " + milestone.title);
