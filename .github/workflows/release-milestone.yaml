@@ -5,6 +5,8 @@ on:
     - opened
     - reopened
     - synchronize
+    - milestoned
+    - demilestoned
 
 jobs:
   check-release-milestone:
@@ -56,4 +58,4 @@ jobs:
             }
           }
 
-          core.info('milestone not found - can merge');
+          core.info('milestone found - can merge');
