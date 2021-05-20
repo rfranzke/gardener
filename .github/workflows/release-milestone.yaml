@@ -13,7 +13,7 @@ jobs:
     steps:
     - id: version
       run: |
-        version=`cat ./VERSION`
+        version=`cat VERSION`
         echo "::set-output name=version::$version"
 
     - name: Block merge if milestone is missing
