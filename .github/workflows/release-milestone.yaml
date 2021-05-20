@@ -11,9 +11,13 @@ jobs:
     name: Check if release milestone exists
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v2
+      with: 
+        path: './'  
+
     - id: version
       run: |
-        version=`cat VERSION`
+        version=`cat ./VERSION`
         echo "::set-output name=version::$version"
 
     - name: Block merge if milestone is missing
