@@ -30,7 +30,7 @@ jobs:
 
           let match = nextMinorRegex.exec('${{ steps.version.outputs.version }}');
           if (match == null) {
-            core.info('VERSION does not indicate that the next version is a new minor release');
+            core.info('VERSION does not indicate that the next version is a new minor release - skipping check');
             return;
           }
           const nextMinorVersion = match[1];
@@ -50,9 +50,9 @@ jobs:
 
             // milestone found, check if PR is associated
             if (context.payload.pull_request.milestone == null) {
-              core.setFailed('milestone missing - cannot merge');
+              core.setFailed('Milestone for next minor release ' + nextMinorVersion + ' found, however, PR is not milestoned for it. Merge is not allowed.');
               return
             }
           }
 
-          core.info('milestone found - can merge');
+          core.info('Milestone for next minor release ' + nextMinorVersion + ' found and PR is milestoned for it. Merge is allowed.');
