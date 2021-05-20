@@ -47,9 +47,10 @@ jobs:
             direction: 'desc'
           });
           
+          core.info(context);
           core.info(context.issue);
-          core.info(context.pull_request);
-
+          core.info(context.issue.milestone);
+      
           for (const milestone of milestones.data) {
             core.info("processing " + milestone.title);
             if (milestone.title != nextMinorVersion) {
