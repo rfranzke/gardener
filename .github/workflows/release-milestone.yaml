@@ -5,6 +5,8 @@ on:
     - opened
     - reopened
     - synchronize
+    - labeled
+    - unlabeled
 
 jobs:
   check-release-milestone:
