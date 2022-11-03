@@ -1,9 +1,17 @@
 # High Availability Of Deployed Components
 
 `gardenlet` and extension controllers are deploying components via `Deployment`s, `StatefulSet`s, etc. as part of the shoot control plane, or the seed or shoot system components.
-Some of those should be deployed such that they are highly available to improve the overall quality and robustness of the cluster.
 
-This document outlines what needs to be done to achieve this goal.
+Before we commence, all components shall be generally equipped with PDBs (`maxUnavailable: 1`):
+
+```yaml
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: ...
+```
+
+Some of the above component deployments must be further tuned to improve fault tolerance / resilience of the service. This document outlines what needs to be done to achieve this goal.
 
 ## Seed Clusters
 
@@ -34,7 +42,7 @@ Concretely, all seed system components should respect the following conventions:
 
   Apart from the above, there might be special cases where these rules do not apply, for example:
 
-  - `istio-ingressgateway` is also scaled horizontally, hence the above number are the minimum values.
+  - `istio-ingressgateway` is also scaled horizontally, hence the above numbers are the minimum values.
   - `nginx-ingress-controller` in the seed cluster is only used to advertise observability endpoints, hence it also only runs with `1` replica at all times. In the future, this component might disappear in favor of the `istio-ingressgateway` anyways.
 
 - **Topology Spread Constraints**
@@ -66,7 +74,7 @@ Concretely, all seed system components should respect the following conventions:
     ```
 
 > According to these conventions, even seed clusters with only one availability zone try to be highly available "as good as possible" by spreading the replicas across multiple nodes.
-> Hence, while such seed clusters obviously cannot cater with zone outages, they can at least cater with node loss.
+> Hence, while such seed clusters obviously cannot handle zone outages, they can at least handle node failures.
 
 ## Shoot Clusters
 
@@ -89,8 +97,8 @@ All control plane components should respect the following conventions:
 
   Apart from the above, there might be special cases where these rules do not apply, for example:
 
-  - `etcd` is a server, though the most critical component of a cluster requiring a quorum to survive failures Hence, it should have `3` replicas even when the failure tolerance is `node` only.
-  - `kube-apiserver` is scaled horizontally, hence the above number are the minimum values (even when the shoot cluster is not HA there might be multiple replicas).
+  - `etcd` is a server, though the most critical component of a cluster requiring a quorum to survive failures. Hence, it should have `3` replicas even when the failure tolerance is `node` only.
+  - `kube-apiserver` is scaled horizontally, hence the above numbers are the minimum values (even when the shoot cluster is not HA there might be multiple replicas).
 
 - **Topology Spread Constraints**
 
@@ -103,12 +111,13 @@ All control plane components should respect the following conventions:
       topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
+        whenUnsatisfiable: ScheduleAnyway
         matchLabels: ...
     ```
 
-    However, when the shoot cluster has no HA settings, the `whenUnsafisfiable` should be set to `ScheduleAnyway`.
     Hence, the node spread is done on best-effort basis only.
+    
+    However, if the shoot cluster has defined no failure tolerance, the `whenUnsafisfiable` field should be set to `DoNotSchedule`.
 
   - ... and the failure tolerance type of the shoot cluster is `zone`, then the component should also have a second `topologySpreadConstraint` ensuring the replicas are spread over the zones:
 
@@ -147,7 +156,7 @@ All control plane components should respect the following conventions:
             # - ...
   ```
 
-  This is to ensure all pods are running in the same (set of) availability zone(s) such that cross-zone network traffic is prevented as much as possible (such traffic is typically charged by the underlying infrastructure provider).
+  This is to ensure all pods are running in the same (set of) availability zone(s) such that cross-zone network traffic is avoided as much as possible (such traffic is typically charged by the underlying infrastructure provider).
 
 ### System Components
 
@@ -166,6 +175,7 @@ All system components should respect the following conventions:
 
   Apart from the above, there might be special cases where these rules do not apply, for example:
 
+  - `coredns` is scaled horizontally (today), hence the above numbers are the minimum values (possibly, scaling these components vertically may be more appropriate, but that's unrelated to the HA subject matter).
   - Optional addons like `nginx-ingress` or `kubernetes-dashboard` are only provided on best-effort basis for evaluation purposes, hence they run with `1` replica at all times.
 
 - **Topology Spread Constraints**
