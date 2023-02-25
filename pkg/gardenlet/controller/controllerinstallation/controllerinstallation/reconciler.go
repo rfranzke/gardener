@@ -42,6 +42,7 @@ import (
 	"github.com/gardener/gardener/pkg/features"
 	"github.com/gardener/gardener/pkg/gardenlet/apis/config"
 	ctrlinstutils "github.com/gardener/gardener/pkg/gardenlet/controller/controllerinstallation/utils"
+	gardenletfeatures "github.com/gardener/gardener/pkg/gardenlet/features"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
@@ -213,6 +214,8 @@ func (r *Reconciler) reconcile(
 				"blockCIDRs":      seed.Spec.Networks.BlockCIDRs,
 				"spec":            seed.Spec,
 			},
+			// TODO(rfranzke): Remove this in a future version when all provider extensions support the feature.
+			"gardenletManagesMCM": gardenletfeatures.FeatureGate.Enabled(features.MachineControllerManagerDeployment),
 		},
 	}
 
