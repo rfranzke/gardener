@@ -28,7 +28,12 @@ import (
 	"github.com/gardener/gardener/pkg/provider-local/local"
 )
 
-var logger = log.Log.WithName("local-controlplane-webhook")
+var (
+	logger = log.Log.WithName("local-controlplane-webhook")
+
+	// ManageMCM specifies whether the machine-controller-manager should be managed.
+	ManageMCM bool
+)
 
 // AddToManager creates a webhook and adds it to the manager.
 func AddToManager(mgr manager.Manager) (*extensionswebhook.Webhook, error) {
@@ -43,6 +48,6 @@ func AddToManager(mgr manager.Manager) (*extensionswebhook.Webhook, error) {
 			{Obj: &appsv1.Deployment{}},
 			{Obj: &extensionsv1alpha1.OperatingSystemConfig{}},
 		},
-		Mutator: genericmutator.NewMutator(NewEnsurer(logger), oscutils.NewUnitSerializer(), kubelet.NewConfigCodec(fciCodec), fciCodec, logger),
+		Mutator: genericmutator.NewMutator(NewEnsurer(logger, ManageMCM), oscutils.NewUnitSerializer(), kubelet.NewConfigCodec(fciCodec), fciCodec, logger),
 	})
 }

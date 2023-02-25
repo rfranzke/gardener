@@ -62,6 +62,7 @@ import (
 	localservice "github.com/gardener/gardener/pkg/provider-local/controller/service"
 	localworker "github.com/gardener/gardener/pkg/provider-local/controller/worker"
 	"github.com/gardener/gardener/pkg/provider-local/local"
+	controlplanewebhook "github.com/gardener/gardener/pkg/provider-local/webhook/controlplane"
 	"github.com/gardener/gardener/pkg/utils/retry"
 )
 
@@ -250,6 +251,10 @@ func NewControllerManagerCommand(ctx context.Context) *cobra.Command {
 			reconcileOpts.Completed().Apply(&localinfrastructure.DefaultAddOptions.IgnoreOperationAnnotation)
 			reconcileOpts.Completed().Apply(&oscommon.DefaultAddOptions.IgnoreOperationAnnotation)
 			reconcileOpts.Completed().Apply(&localworker.DefaultAddOptions.IgnoreOperationAnnotation)
+
+			// TODO(rfranzke): Remove this in a future version.
+			localworker.DefaultAddOptions.ManageMCM = !generalOpts.Completed().GardenletManagesMCM
+			controlplanewebhook.ManageMCM = !generalOpts.Completed().GardenletManagesMCM
 
 			if err := mgr.AddReadyzCheck("informer-sync", gardenerhealthz.NewCacheSyncHealthz(mgr.GetCache())); err != nil {
 				return fmt.Errorf("could not add readycheck for informers: %w", err)
