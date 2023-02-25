@@ -213,6 +213,8 @@ func (r *Reconciler) reconcile(
 				"blockCIDRs":      seed.Spec.Networks.BlockCIDRs,
 				"spec":            seed.Spec,
 			},
+			// TODO(rfranzke): Remove this in a future version when all provider extensions support the feature.
+			"gardenletManagesMCM": features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment),
 		},
 	}
 
