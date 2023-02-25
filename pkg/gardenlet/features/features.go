@@ -31,5 +31,6 @@ func RegisterFeatureGates() {
 		features.CoreDNSQueryRewriting,
 		features.IPv6SingleStack,
 		features.FullNetworkPoliciesInRuntimeCluster,
+		features.MachineControllerManagerDeployment,
 	)))
 }
