@@ -41,7 +41,7 @@ import (
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
-// Ensurer ensures that various standard Kubernets controlplane objects conform to the provider requirements.
+// Ensurer ensures that various standard Kubernetes control plane objects conform to the provider requirements.
 // If they don't initially, they are mutated accordingly.
 type Ensurer interface {
 	// EnsureKubeAPIServerService ensures that the kube-apiserver service conforms to the provider requirements.
@@ -59,6 +59,9 @@ type Ensurer interface {
 	// EnsureClusterAutoscalerDeployment ensures that the cluster-autoscaler deployment conforms to the provider requirements.
 	// "old" might be "nil" and must always be checked.
 	EnsureClusterAutoscalerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error
+	// EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
+	// "old" might be "nil" and must always be checked.
+	EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error
 	// EnsureETCD ensures that the etcds conform to the respective provider requirements.
 	// "old" might be "nil" and must always be checked.
 	EnsureETCD(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *druidv1alpha1.Etcd) error
@@ -166,6 +169,9 @@ func (m *mutator) Mutate(ctx context.Context, new, old client.Object) error {
 		case v1beta1constants.DeploymentNameKubeScheduler:
 			extensionswebhook.LogMutation(m.logger, x.Kind, x.Namespace, x.Name)
 			return m.ensurer.EnsureKubeSchedulerDeployment(ctx, gctx, x, oldDep)
+		case v1beta1constants.DeploymentNameMachineControllerManager:
+			extensionswebhook.LogMutation(m.logger, x.Kind, x.Namespace, x.Name)
+			return m.ensurer.EnsureMachineControllerManagerDeployment(ctx, gctx, x, oldDep)
 		case v1beta1constants.DeploymentNameClusterAutoscaler:
 			extensionswebhook.LogMutation(m.logger, x.Kind, x.Namespace, x.Name)
 			return m.ensurer.EnsureClusterAutoscalerDeployment(ctx, gctx, x, oldDep)
