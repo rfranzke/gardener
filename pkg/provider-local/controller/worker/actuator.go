@@ -32,6 +32,8 @@ import (
 	"github.com/gardener/gardener/pkg/provider-local/apis/local/helper"
 	"github.com/gardener/gardener/pkg/provider-local/imagevector"
 	"github.com/gardener/gardener/pkg/provider-local/local"
+	"github.com/gardener/gardener/pkg/utils/chart"
+	gardenerimagevector "github.com/gardener/gardener/pkg/utils/imagevector"
 )
 
 type delegateFactory struct {
@@ -43,17 +45,31 @@ type actuator struct {
 }
 
 // NewActuator creates a new Actuator that updates the status of the handled WorkerPoolConfigs.
-func NewActuator() worker.Actuator {
-	delegateFactory := &delegateFactory{}
+func NewActuator(manageMCM bool) worker.Actuator {
+	var (
+		mcmName              string
+		mcmChartSeed         *chart.Chart
+		mcmChartShoot        *chart.Chart
+		imageVector          gardenerimagevector.ImageVector
+		chartRendererFactory extensionscontroller.ChartRendererFactory
+	)
+
+	if manageMCM {
+		mcmName = local.MachineControllerManagerName
+		mcmChartSeed = mcmChart
+		mcmChartShoot = mcmShootChart
+		imageVector = imagevector.ImageVector()
+		chartRendererFactory = extensionscontroller.ChartRendererFactoryFunc(util.NewChartRendererForShoot)
+	}
 
 	return &actuator{
 		genericactuator.NewActuator(
-			delegateFactory,
-			local.MachineControllerManagerName,
-			mcmChart,
-			mcmShootChart,
-			imagevector.ImageVector(),
-			extensionscontroller.ChartRendererFactoryFunc(util.NewChartRendererForShoot),
+			&delegateFactory{},
+			mcmName,
+			mcmChartSeed,
+			mcmChartShoot,
+			imageVector,
+			chartRendererFactory,
 		),
 	}
 }

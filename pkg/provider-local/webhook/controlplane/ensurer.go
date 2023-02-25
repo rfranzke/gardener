@@ -56,15 +56,26 @@ func init() {
 }
 
 // NewEnsurer creates a new controlplane ensurer.
-func NewEnsurer(logger logr.Logger) genericmutator.Ensurer {
+func NewEnsurer(logger logr.Logger, manageMCM bool) genericmutator.Ensurer {
 	return &ensurer{
-		logger: logger.WithName("local-controlplane-ensurer"),
+		logger:    logger.WithName("local-controlplane-ensurer"),
+		manageMCM: manageMCM,
 	}
 }
 
 type ensurer struct {
 	genericmutator.NoopEnsurer
-	logger logr.Logger
+	logger    logr.Logger
+	manageMCM bool
+}
+
+// EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
+func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, newObj, _ *appsv1.Deployment) error {
+	if e.manageMCM {
+		return nil
+	}
+
+	return nil
 }
 
 func (e *ensurer) EnsureKubeAPIServerDeployment(_ context.Context, _ extensionscontextwebhook.GardenContext, new, _ *appsv1.Deployment) error {
