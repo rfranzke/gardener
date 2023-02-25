@@ -53,6 +53,11 @@ func (e *NoopEnsurer) EnsureKubeSchedulerDeployment(ctx context.Context, gctx ex
 	return nil
 }
 
+// EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
+func (e *NoopEnsurer) EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error {
+	return nil
+}
+
 // EnsureClusterAutoscalerDeployment ensures that the cluster-autoscaler deployment conforms to the provider requirements.
 func (e *NoopEnsurer) EnsureClusterAutoscalerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error {
 	return nil
