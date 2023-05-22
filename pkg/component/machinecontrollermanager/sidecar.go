@@ -20,13 +20,21 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// GetMCMSidecarContainerTemplate ...
-func GetMCMSidecarContainer(namespace, name, image string) corev1.Container {
+// GetSidecarContainer returns a corev1.Container object which is
+// injected into the mcm deployment managed by the gardenlet. This
+// function can be used in provider specific
+// machine-controller-manager implementations, when a meaningful
+// default sidecar container is required. Thus, this function returns
+// kind of a template for these scenarios.
+func GetSidecarContainer(namespace, providerName, image string) corev1.Container {
 
 	const metricsPort = "10259"
 	return corev1.Container{
-		Name:  name,
-		Image: image,
+		Name:                     "machine-controller-manager-" + providerName,
+		Image:                    image,
+		TerminationMessagePath:   "/dev/termination-log",
+		TerminationMessagePolicy: "File",
+		ImagePullPolicy:          "IfNotPresent",
 		Command: []string{
 			"./machine-controller",
 			"--control-kubeconfig=inClusterConfig",
@@ -62,11 +70,6 @@ func GetMCMSidecarContainer(namespace, name, image string) corev1.Container {
 			SuccessThreshold:    1,
 			FailureThreshold:    3,
 		},
-		StartupProbe:             &corev1.Probe{},
-		Lifecycle:                &corev1.Lifecycle{},
-		TerminationMessagePath:   "/dev/termination-log",
-		TerminationMessagePolicy: "File",
-		ImagePullPolicy:          "IfNotPresent",
 	}
 
 }

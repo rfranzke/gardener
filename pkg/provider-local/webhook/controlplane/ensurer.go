@@ -83,8 +83,7 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 		return err
 	}
 
-	container := machinecontrollermanager.GetMCMSidecarContainer(newObj.Namespace, "machine-controller-manager-provier-local", image.String())
-
+	container := machinecontrollermanager.GetSidecarContainer(newObj.Namespace, "provider-local", image.String())
 	newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
 
 	return nil
