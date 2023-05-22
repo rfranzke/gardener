@@ -84,7 +84,21 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 	}
 
 	container := machinecontrollermanager.GetSidecarContainer(newObj.Namespace, "provider-local", image.String())
-	newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
+
+	// check whether the container has already been injected into the
+	// mcm deployment, as we do not want to append it to the containers
+	// list in that case.
+	containerAlreadyInjected := false
+	for _, c := range newObj.Spec.Template.Spec.Containers {
+		if c.Image == container.Image {
+			containerAlreadyInjected = true
+			break
+		}
+	}
+
+	if !containerAlreadyInjected {
+		newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
+	}
 
 	return nil
 }
