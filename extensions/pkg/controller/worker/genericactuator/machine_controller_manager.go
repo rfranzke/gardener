@@ -29,6 +29,7 @@ import (
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
@@ -48,6 +49,11 @@ const (
 type ReplicaCount func() int32
 
 func (a *genericActuator) deployMachineControllerManager(ctx context.Context, logger logr.Logger, workerObj *extensionsv1alpha1.Worker, cluster *extensionscontroller.Cluster, workerDelegate WorkerDelegate, replicas ReplicaCount) error {
+	if !a.mcmManaged {
+		logger.Info("machine-controller-manager deployment skipped since gardenlet manages it")
+		return nil
+	}
+
 	logger.Info("Deploying the machine-controller-manager")
 
 	mcmValues, err := workerDelegate.GetMachineControllerManagerChartValues(ctx)
@@ -71,7 +77,7 @@ func (a *genericActuator) deployMachineControllerManager(ctx context.Context, lo
 		return fmt.Errorf("could not apply MCM chart in seed for worker '%s': %w", kubernetesutils.ObjectName(workerObj), err)
 	}
 
-	if err := a.applyMachineControllerManagerShootChart(ctx, workerDelegate, workerObj, cluster); err != nil {
+	if err := a.applyMachineControllerManagerShootChart(ctx, logger, workerDelegate, workerObj, cluster); err != nil {
 		return fmt.Errorf("could not apply machine-controller-manager shoot chart: %w", err)
 	}
 
@@ -84,6 +90,11 @@ func (a *genericActuator) deployMachineControllerManager(ctx context.Context, lo
 }
 
 func (a *genericActuator) deleteMachineControllerManager(ctx context.Context, logger logr.Logger, workerObj *extensionsv1alpha1.Worker) error {
+	if !a.mcmManaged {
+		logger.Info("machine-controller-manager deletion skipped since gardenlet manages it")
+		return nil
+	}
+
 	logger.Info("Deleting the machine-controller-manager")
 	if err := managedresources.Delete(ctx, a.client, workerObj.Namespace, McmShootResourceName, false); err != nil {
 		return fmt.Errorf("could not delete managed resource containing mcm chart for worker '%s': %w", kubernetesutils.ObjectName(workerObj), err)
@@ -120,10 +131,15 @@ func (a *genericActuator) waitUntilMachineControllerManagerIsDeleted(ctx context
 
 func (a *genericActuator) scaleMachineControllerManager(ctx context.Context, logger logr.Logger, worker *extensionsv1alpha1.Worker, replicas int32) error {
 	logger.Info("Scaling machine-controller-manager", "replicas", replicas)
-	return client.IgnoreNotFound(kubernetes.ScaleDeployment(ctx, a.client, kubernetesutils.Key(worker.Namespace, McmDeploymentName), replicas))
+	return client.IgnoreNotFound(kubernetes.ScaleDeployment(ctx, a.client, kubernetesutils.Key(worker.Namespace, v1beta1constants.DeploymentNameMachineControllerManager), replicas))
 }
 
-func (a *genericActuator) applyMachineControllerManagerShootChart(ctx context.Context, workerDelegate WorkerDelegate, workerObj *extensionsv1alpha1.Worker, cluster *controller.Cluster) error {
+func (a *genericActuator) applyMachineControllerManagerShootChart(ctx context.Context, logger logr.Logger, workerDelegate WorkerDelegate, workerObj *extensionsv1alpha1.Worker, cluster *controller.Cluster) error {
+	if !a.mcmManaged {
+		logger.Info("machine-controller-manager shoot chart application skipped since gardenlet manages it")
+		return nil
+	}
+
 	// Create shoot chart renderer
 	chartRenderer, err := a.chartRendererFactory.NewChartRendererForShoot(cluster.Shoot.Spec.Kubernetes.Version)
 	if err != nil {

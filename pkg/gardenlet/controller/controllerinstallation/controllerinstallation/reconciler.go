@@ -215,7 +215,7 @@ func (r *Reconciler) reconcile(
 				"spec":            seed.Spec,
 			},
 			// TODO(rfranzke): Remove this in a future version when all provider extensions support the feature.
-			"gardenletManagesMCM": gardenletfeatures.FeatureGate.Enabled(features.MachineControllerManagerDeployment),
+			"gardenletManagesMCM": features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment),
 		},
 	}
 
