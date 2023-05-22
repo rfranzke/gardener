@@ -29,6 +29,7 @@ import (
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
 	"k8s.io/utils/pointer"
 
+	"github.com/gardener/gardener/extensions/pkg/webhook"
 	extensionscontextwebhook "github.com/gardener/gardener/extensions/pkg/webhook/context"
 	"github.com/gardener/gardener/extensions/pkg/webhook/controlplane/genericmutator"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -85,21 +86,7 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 	}
 
 	container := machinecontrollermanager.GetSidecarContainer(newObj.Namespace, "provider-local", image.String())
-
-	// check whether the container has already been injected into the
-	// mcm deployment, as we do not want to append it to the containers
-	// list in that case.
-	containerAlreadyInjected := false
-	for _, c := range newObj.Spec.Template.Spec.Containers {
-		if c.Image == container.Image {
-			containerAlreadyInjected = true
-			break
-		}
-	}
-
-	if !containerAlreadyInjected {
-		newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
-	}
+	newObj.Spec.Template.Spec.Containers = webhook.EnsureContainerWithName(newObj.Spec.Template.Spec.Containers, container)
 
 	return nil
 }
