@@ -45,7 +45,9 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	mockkubelet "github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet/mock"
 	mockutils "github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/utils/mock"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
 	mockclient "github.com/gardener/gardener/pkg/mock/controller-runtime/client"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
 const (
@@ -149,8 +151,13 @@ var _ = Describe("Mutator", func() {
 				nil,
 			),
 			Entry(
-				"other deployments than kube-apiserver, kube-controller-manager, and kube-scheduler",
+				"other deployments than kube-apiserver, kube-controller-manager, machine-controller-manager, and kube-scheduler",
 				&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "test"}},
+				nil,
+			),
+			Entry(
+				"other VPAs than machine-controller-manager",
+				&vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: "test"}},
 				nil,
 			),
 			Entry(
@@ -231,6 +238,20 @@ var _ = Describe("Mutator", func() {
 				func() {
 					new = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameClusterAutoscaler}}
 					ensurer.EXPECT().EnsureClusterAutoscalerDeployment(context.TODO(), gomock.Any(), new, old).Return(nil)
+				},
+			),
+			Entry(
+				"EnsureMachineControllerManagerDeployment with a machine-controller-manager deployment",
+				func() {
+					new = &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: v1beta1constants.DeploymentNameMachineControllerManager}}
+					ensurer.EXPECT().EnsureMachineControllerManagerDeployment(context.TODO(), gomock.Any(), new, old).Return(nil)
+				},
+			),
+			Entry(
+				"EnsureMachineControllerManagerVPA with a machine-controller-manager VPA",
+				func() {
+					new = &vpaautoscalingv1.VerticalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: machinecontrollermanager.VPANameMachineControllerManager}}
+					ensurer.EXPECT().EnsureMachineControllerManagerVPA(context.TODO(), gomock.Any(), new, old).Return(nil)
 				},
 			),
 			Entry(
