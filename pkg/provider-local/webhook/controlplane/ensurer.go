@@ -33,8 +33,11 @@ import (
 	"github.com/gardener/gardener/extensions/pkg/webhook/controlplane/genericmutator"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
+	"github.com/gardener/gardener/pkg/provider-local/imagevector"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
 )
 
 const pathContainerdConfigScript = v1beta1constants.OperatingSystemConfigFilePathBinaries + "/init-containerd-with-registry-mirrors"
@@ -74,6 +77,15 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 	if e.manageMCM {
 		return nil
 	}
+
+	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameMachineControllerManagerProviderLocal)
+	if err != nil {
+		return err
+	}
+
+	container := machinecontrollermanager.GetMCMSidecarContainer(newObj.Namespace, "machine-controller-manager-provier-local", image.String())
+
+	newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
 
 	return nil
 }
