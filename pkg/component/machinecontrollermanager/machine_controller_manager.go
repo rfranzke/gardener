@@ -59,6 +59,8 @@ const (
 	containerName             = "machine-controller-manager"
 	serviceName               = "machine-controller-manager"
 	managedResourceTargetName = "shoot-core-machine-controller-manager"
+	// VPANameMachineControllerManager is the name of the vertical pod autoscaler for the machine-controller-manager.
+	VPANameMachineControllerManager = "machine-controller-manager-vpa"
 )
 
 // Interface contains functions for a machine-controller-manager deployer.
