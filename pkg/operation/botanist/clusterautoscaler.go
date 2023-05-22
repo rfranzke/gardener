@@ -17,9 +17,12 @@ package botanist
 import (
 	"context"
 
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
+	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component/clusterautoscaler"
 	"github.com/gardener/gardener/pkg/utils/images"
 	"github.com/gardener/gardener/pkg/utils/imagevector"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
 // DefaultClusterAutoscaler returns a deployer for the cluster-autoscaler.
@@ -50,4 +53,9 @@ func (b *Botanist) DeployClusterAutoscaler(ctx context.Context) error {
 	}
 
 	return b.Shoot.Components.ControlPlane.ClusterAutoscaler.Destroy(ctx)
+}
+
+// ScaleClusterAutoscalerToZero scales cluster-autoscaler replicas to zero.
+func (b *Botanist) ScaleClusterAutoscalerToZero(ctx context.Context) error {
+	return kubernetes.ScaleDeployment(ctx, b.SeedClientSet.Client(), kubernetesutils.Key(b.Shoot.SeedNamespace, v1beta1constants.DeploymentNameClusterAutoscaler), 0)
 }

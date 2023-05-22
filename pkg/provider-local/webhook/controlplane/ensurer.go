@@ -38,6 +38,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
 const pathContainerdConfigScript = v1beta1constants.OperatingSystemConfigFilePathBinaries + "/init-containerd-with-registry-mirrors"
@@ -98,6 +99,15 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 
 	if !containerAlreadyInjected {
 		newObj.Spec.Template.Spec.Containers = append(newObj.Spec.Template.Spec.Containers, container)
+	}
+
+	return nil
+}
+
+// EnsureMachineControllerManagerVPA ensures that the machine-controller-manager VPA conforms to the provider requirements.
+func (e *ensurer) EnsureMachineControllerManagerVPA(ctx context.Context, gctx extensionscontextwebhook.GardenContext, newObj, _ *vpaautoscalingv1.VerticalPodAutoscaler) error {
+	if e.manageMCM {
+		return nil
 	}
 
 	return nil

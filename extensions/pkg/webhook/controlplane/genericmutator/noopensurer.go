@@ -26,6 +26,7 @@ import (
 
 	extensionscontextwebhook "github.com/gardener/gardener/extensions/pkg/webhook/context"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
 // NoopEnsurer provides no-op implementation of Ensurer. This can be anonymously composed by actual Ensurers for convenience.
@@ -55,6 +56,11 @@ func (e *NoopEnsurer) EnsureKubeSchedulerDeployment(ctx context.Context, gctx ex
 
 // EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
 func (e *NoopEnsurer) EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error {
+	return nil
+}
+
+// EnsureMachineControllerManagerVPA ensures that the machine-controller-manager deployment conforms to the provider requirements.
+func (e *NoopEnsurer) EnsureMachineControllerManagerVPA(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *vpaautoscalingv1.VerticalPodAutoscaler) error {
 	return nil
 }
 
