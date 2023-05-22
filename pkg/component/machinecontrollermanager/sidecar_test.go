@@ -24,51 +24,58 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = It("Should return a default provider specific mcm container spec", func() {
-	container := GetSidecarContainer("test-namespace", "provider-test", "provider-test:latest")
-	Expect(container).To(BeEquivalentTo(
-		corev1.Container{
-			Name:                     "machine-controller-manager-provider-test",
-			Image:                    "provider-test:latest",
-			TerminationMessagePath:   "/dev/termination-log",
-			TerminationMessagePolicy: "File",
-			ImagePullPolicy:          "IfNotPresent",
-			Command: []string{
-				"./machine-controller",
-				"--control-kubeconfig=inClusterConfig",
-				"--machine-creation-timeout=20m",
-				"--machine-drain-timeout=2h",
-				"--machine-health-timeout=10m",
-				"--machine-safety-apiserver-statuscheck-timeout=30s",
-				"--machine-safety-apiserver-statuscheck-period=1m",
-				"--machine-safety-orphan-vms-period=30m",
-				"--namespace=test-namespace",
-				"--port=10259",
-				"--target-kubeconfig=" + gardenerutils.PathGenericKubeconfig,
-				"--v=3",
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "kubeconfig",
-					MountPath: gardenerutils.VolumeMountPathGenericKubeconfig,
-					ReadOnly:  true,
+var _ = Describe("Sidecar", func() {
+
+	It("Should return a default provider specific mcm container spec", func() {
+
+		namespace := "test-namespace"
+		provider := "provider-test"
+		image := "provider-test:latest"
+					
+		container := GetSidecarContainer(namespace, provider, image)
+		Expect(container).To(Equal(
+			corev1.Container{
+				Name:                     "machine-controller-manager-" + provider,
+				Image:                    image,
+				TerminationMessagePath:   "/dev/termination-log",
+				TerminationMessagePolicy: "File",
+				ImagePullPolicy:          "IfNotPresent",
+				Command: []string{
+					"./machine-controller",
+					"--control-kubeconfig=inClusterConfig",
+					"--machine-creation-timeout=20m",
+					"--machine-drain-timeout=2h",
+					"--machine-health-timeout=10m",
+					"--machine-safety-apiserver-statuscheck-timeout=30s",
+					"--machine-safety-apiserver-statuscheck-period=1m",
+					"--machine-safety-orphan-vms-period=30m",
+					"--namespace=" + namespace,
+					"--port=10259",
+					"--target-kubeconfig=" + gardenerutils.PathGenericKubeconfig,
+					"--v=3",
 				},
-			},
-			LivenessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Path:   "/healthz",
-						Port:   *utils.IntStrPtrFromString("10259"),
-						Scheme: "http",
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "kubeconfig",
+						MountPath: gardenerutils.VolumeMountPathGenericKubeconfig,
+						ReadOnly:  true,
 					},
 				},
-				InitialDelaySeconds: 30,
-				TimeoutSeconds:      5,
-				PeriodSeconds:       10,
-				SuccessThreshold:    1,
-				FailureThreshold:    3,
+				LivenessProbe: &corev1.Probe{
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Path:   "/healthz",
+							Port:   *utils.IntStrPtrFromString("10259"),
+							Scheme: "http",
+						},
+					},
+					InitialDelaySeconds: 30,
+					TimeoutSeconds:      5,
+					PeriodSeconds:       10,
+					SuccessThreshold:    1,
+					FailureThreshold:    3,
+				},
 			},
-		},
-	))
-
+		))
+	})
 })
