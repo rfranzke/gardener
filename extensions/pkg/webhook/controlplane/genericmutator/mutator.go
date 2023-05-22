@@ -38,7 +38,9 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/original/components/kubelet"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/utils"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
+	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
 // Ensurer ensures that various standard Kubernetes control plane objects conform to the provider requirements.
@@ -59,6 +61,9 @@ type Ensurer interface {
 	// EnsureClusterAutoscalerDeployment ensures that the cluster-autoscaler deployment conforms to the provider requirements.
 	// "old" might be "nil" and must always be checked.
 	EnsureClusterAutoscalerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error
+	// EnsureMachineControllerManagerVPA ensures that the machine-controller-manager VPA settings conform to the provider requirements.
+	// "old" might be "nil" and must always be checked.
+	EnsureMachineControllerManagerVPA(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *vpaautoscalingv1.VerticalPodAutoscaler) error
 	// EnsureMachineControllerManagerDeployment ensures that the machine-controller-manager deployment conforms to the provider requirements.
 	// "old" might be "nil" and must always be checked.
 	EnsureMachineControllerManagerDeployment(ctx context.Context, gctx extensionscontextwebhook.GardenContext, new, old *appsv1.Deployment) error
@@ -178,6 +183,20 @@ func (m *mutator) Mutate(ctx context.Context, new, old client.Object) error {
 		case v1beta1constants.DeploymentNameVPNSeedServer:
 			extensionswebhook.LogMutation(m.logger, x.Kind, x.Namespace, x.Name)
 			return m.ensurer.EnsureVPNSeedServerDeployment(ctx, gctx, x, oldDep)
+		}
+	case *vpaautoscalingv1.VerticalPodAutoscaler:
+		var oldVPA *vpaautoscalingv1.VerticalPodAutoscaler
+		if old != nil {
+			var ok bool
+			oldVPA, ok = old.(*vpaautoscalingv1.VerticalPodAutoscaler)
+			if !ok {
+				return errors.New("could not cast old object to vpaautoscalingv1.VerticalPodAutoscaler")
+			}
+		}
+		switch x.Name {
+		case machinecontrollermanager.VPANameMachineControllerManager:
+			extensionswebhook.LogMutation(m.logger, x.Kind, x.Namespace, x.Name)
+			return m.ensurer.EnsureMachineControllerManagerVPA(ctx, gctx, x, oldVPA)
 		}
 	case *druidv1alpha1.Etcd:
 		switch x.Name {
