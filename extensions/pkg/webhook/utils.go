@@ -231,7 +231,7 @@ func EnsureNoContainerWithName(items []corev1.Container, name string) []corev1.C
 // EnsureContainerResourcePolicyWithName ensures that a container policy with a name equal to the name of the given container policy
 // exists in the given slice and is equal to the given contailer policy.
 func EnsureVPAContainerResourcePolicyWithName(items []vpaautoscalingv1.ContainerResourcePolicy, item vpaautoscalingv1.ContainerResourcePolicy) []vpaautoscalingv1.ContainerResourcePolicy {
-	if i := containerResourcePolicyWithNameIndex(items, item.ContainerName); i < 0 {
+	if i := vpaContainerResourcePolicyWithNameIndex(items, item.ContainerName); i < 0 {
 		items = append(items, item)
 	} else if !reflect.DeepEqual(items[i], item) {
 		items = append(append(items[:i], item), items[i+1:]...)

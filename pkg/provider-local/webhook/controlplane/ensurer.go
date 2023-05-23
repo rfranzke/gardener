@@ -106,8 +106,8 @@ func (e *ensurer) EnsureMachineControllerManagerVPA(ctx context.Context, gctx ex
 		corev1.ResourceMemory: resource.MustParse("5G"),
 	}
 
-	containerResourcePolicy := machinecontrollermanager.GetVPAContainerPolicy(newObj.Namespace, "provider-local", minAllowed, maxAllowed)
-	newObj.Spec.ResourcePolicy.ContainerPolicies = webhook.EnsureContainerResourcePolicyWithName(newObj.Spec.ResourcePolicy.ContainerPolicies, containerResourcePolicy)
+	containerResourcePolicy := machinecontrollermanager.GetVPAContainerPolicy("provider-local", minAllowed, maxAllowed)
+	newObj.Spec.ResourcePolicy.ContainerPolicies = webhook.EnsureVPAContainerResourcePolicyWithName(newObj.Spec.ResourcePolicy.ContainerPolicies, containerResourcePolicy)
 
 	return nil
 }
