@@ -6,6 +6,8 @@ package mock
 
 import (
 	context "context"
+	reflect "reflect"
+
 	semver "github.com/Masterminds/semver"
 	unit "github.com/coreos/go-systemd/v22/unit"
 	v1alpha1 "github.com/gardener/etcd-druid/api/v1alpha1"
@@ -16,7 +18,6 @@ import (
 	v10 "k8s.io/api/core/v1"
 	v11 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	v1beta1 "k8s.io/kubelet/config/v1beta1"
-	reflect "reflect"
 )
 
 // MockEnsurer is a mock of Ensurer interface
