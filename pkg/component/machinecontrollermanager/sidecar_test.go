@@ -17,11 +17,11 @@ package machinecontrollermanager_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/gardener/gardener/pkg/component/machinecontrollermanager"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("Sidecar", func() {
@@ -31,7 +31,7 @@ var _ = Describe("Sidecar", func() {
 		namespace := "test-namespace"
 		provider := "provider-test"
 		image := "provider-test:latest"
-					
+
 		container := GetSidecarContainer(namespace, provider, image)
 		Expect(container).To(Equal(
 			corev1.Container{
