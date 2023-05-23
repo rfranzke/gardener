@@ -29,10 +29,13 @@ import (
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
 	"k8s.io/utils/pointer"
 
+	"github.com/gardener/gardener/extensions/pkg/webhook"
 	extensionscontextwebhook "github.com/gardener/gardener/extensions/pkg/webhook/context"
 	"github.com/gardener/gardener/extensions/pkg/webhook/controlplane/genericmutator"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
+	"github.com/gardener/gardener/pkg/component/machinecontrollermanager"
+	"github.com/gardener/gardener/pkg/provider-local/imagevector"
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
@@ -75,6 +78,14 @@ func (e *ensurer) EnsureMachineControllerManagerDeployment(ctx context.Context, 
 	if e.manageMCM {
 		return nil
 	}
+
+	image, err := imagevector.ImageVector().FindImage(imagevector.ImageNameMachineControllerManagerProviderLocal)
+	if err != nil {
+		return err
+	}
+
+	container := machinecontrollermanager.GetSidecarContainer(newObj.Namespace, "provider-local", image.String())
+	newObj.Spec.Template.Spec.Containers = webhook.EnsureContainerWithName(newObj.Spec.Template.Spec.Containers, container)
 
 	return nil
 }
