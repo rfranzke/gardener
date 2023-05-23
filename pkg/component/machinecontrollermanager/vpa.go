@@ -24,7 +24,7 @@ import (
 // This function can be used in provider specific
 // machine-controller-manager implementations, when a meaningful
 // default container policy is required.
-func GetVPAContainerPolicy(namespace, providerName string, minAllowed, maxAllowed corev1.ResourceList) vpaautoscalingv1.ContainerResourcePolicy {
+func GetVPAContainerPolicy(providerName string, minAllowed, maxAllowed corev1.ResourceList) vpaautoscalingv1.ContainerResourcePolicy {
 
 	var ccv = vpaautoscalingv1.ContainerControlledValuesRequestsOnly
 	return vpaautoscalingv1.ContainerResourcePolicy{
