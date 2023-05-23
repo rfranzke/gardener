@@ -50,7 +50,7 @@ type ReplicaCount func() int32
 
 func (a *genericActuator) deployMachineControllerManager(ctx context.Context, logger logr.Logger, workerObj *extensionsv1alpha1.Worker, cluster *extensionscontroller.Cluster, workerDelegate WorkerDelegate, replicas ReplicaCount) error {
 	if !a.mcmManaged {
-		logger.Info("machine-controller-manager deployment skipped since gardenlet manages it")
+		logger.Info("Skip machine-controller-manager deployment since gardenlet manages it")
 		return nil
 	}
 
@@ -91,7 +91,7 @@ func (a *genericActuator) deployMachineControllerManager(ctx context.Context, lo
 
 func (a *genericActuator) deleteMachineControllerManager(ctx context.Context, logger logr.Logger, workerObj *extensionsv1alpha1.Worker) error {
 	if !a.mcmManaged {
-		logger.Info("machine-controller-manager deletion skipped since gardenlet manages it")
+		logger.Info("Skip machine-controller-manager deletion since gardenlet manages it")
 		return nil
 	}
 
@@ -136,7 +136,7 @@ func (a *genericActuator) scaleMachineControllerManager(ctx context.Context, log
 
 func (a *genericActuator) applyMachineControllerManagerShootChart(ctx context.Context, logger logr.Logger, workerDelegate WorkerDelegate, workerObj *extensionsv1alpha1.Worker, cluster *controller.Cluster) error {
 	if !a.mcmManaged {
-		logger.Info("machine-controller-manager shoot chart application skipped since gardenlet manages it")
+		logger.Info("Skip machine-controller-manager shoot chart application since gardenlet manages it")
 		return nil
 	}
 
