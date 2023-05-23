@@ -168,7 +168,7 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 			return nil, err
 		}
 		if features.DefaultFeatureGate.Enabled(features.MachineControllerManagerDeployment) {
-			o.Shoot.Components.ControlPlane.MachineControllerManager, err = b.DefaultMachineControllerManager()
+			o.Shoot.Components.ControlPlane.MachineControllerManager, err = b.DefaultMachineControllerManager(ctx)
 			if err != nil {
 				return nil, err
 			}
