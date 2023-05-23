@@ -15,9 +15,10 @@
 package machinecontrollermanager
 
 import (
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/gardener/gardener/pkg/utils"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
-	corev1 "k8s.io/api/core/v1"
 )
 
 // GetSidecarContainer returns a corev1.Container object which is

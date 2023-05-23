@@ -603,6 +603,7 @@ build:
         - pkg/component/extensions/operatingsystemconfig/utils
         - pkg/component/kubeapiserver/constants
         - pkg/component/kubeproxy
+        - pkg/component/machinecontrollermanager
         - pkg/controller/service
         - pkg/controllerutils
         - pkg/controllerutils/mapper
@@ -894,6 +895,7 @@ build:
         - pkg/component/logging/fluentoperator
         - pkg/component/logging/fluentoperator/customresources
         - pkg/component/logging/vali
+        - pkg/component/machinecontrollermanager
         - pkg/component/metricsserver
         - pkg/component/monitoring
         - pkg/component/namespaces
