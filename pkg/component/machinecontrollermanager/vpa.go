@@ -19,12 +19,11 @@ import (
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
-// GetSidecarContainer returns a corev1.Container object which is
-// injected into the mcm deployment managed by the gardenlet. This
-// function can be used in provider specific
+// GetVPAContainerPolicy returns a vpaautoscalingv1.ContainerResourcePolicy
+// object which is injected into the mcm VPA managed by the gardenlet.
+// This function can be used in provider specific
 // machine-controller-manager implementations, when a meaningful
-// default sidecar container is required. Thus, this function returns
-// kind of a template for these scenarios.
+// default container policy is required.
 func GetVPAContainerPolicy(namespace, providerName string, minAllowed, maxAllowed v1.ResourceList) vpaautoscalingv1.ContainerResourcePolicy {
 
 	var ccv = vpaautoscalingv1.ContainerControlledValuesRequestsOnly
