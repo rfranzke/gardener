@@ -24,6 +24,8 @@ import (
 	"github.com/Masterminds/sprig"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeletconfigv1beta1 "k8s.io/kubelet/config/v1beta1"
@@ -95,6 +97,17 @@ func (e *ensurer) EnsureMachineControllerManagerVPA(ctx context.Context, gctx ex
 	if e.manageMCM {
 		return nil
 	}
+
+	minAllowed := v1.ResourceList{
+		v1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	maxAllowed := v1.ResourceList{
+		v1.ResourceCPU:    resource.MustParse("2"),
+		v1.ResourceMemory: resource.MustParse("5G"),
+	}
+
+	containerResourcePolicy := machinecontrollermanager.GetVPAContainerPolicy(newObj.Namespace, "provider-local", minAllowed, maxAllowed)
+	newObj.Spec.ResourcePolicy.ContainerPolicies = webhook.EnsureContainerResourcePolicyWithName(newObj.Spec.ResourcePolicy.ContainerPolicies, containerResourcePolicy)
 
 	return nil
 }
