@@ -27,7 +27,7 @@ import (
 
 var _ = Describe("Vpa", func() {
 
-	FIt("Should return a valid VPA container policy", func() {
+	It("Should return a valid VPA container policy", func() {
 
 		namespace := "test-namespace"
 		provider := "provider-test"
