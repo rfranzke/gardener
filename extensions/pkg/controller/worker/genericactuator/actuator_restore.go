@@ -66,7 +66,7 @@ func (a *genericActuator) Restore(ctx context.Context, log logr.Logger, worker *
 
 	// Scale the machine-controller-manager to 0. During restoration MCM must not be working
 	if err := a.scaleMachineControllerManager(ctx, log, worker, 0); err != nil {
-		return fmt.Errorf("failed scale down machine-controller-manager: %w", err)
+		return fmt.Errorf("failed to scale down machine-controller-manager: %w", err)
 	}
 
 	// Deploy generated machine classes.
@@ -86,6 +86,13 @@ func (a *genericActuator) Restore(ctx context.Context, log logr.Logger, worker *
 	// Generate machine deployment configuration based on previously computed list of deployments and deploy them.
 	if err := a.deployMachineDeployments(ctx, log, cluster, worker, existingMachineDeployments, wantedMachineDeployments, workerDelegate.MachineClassKind(), true); err != nil {
 		return fmt.Errorf("failed to restore the machine deployment config: %w", err)
+	}
+
+	// Scale the machine-controller-manager to 1 now that all resources have been restored.
+	if !extensionscontroller.IsHibernated(cluster) {
+		if err := a.scaleMachineControllerManager(ctx, log, worker, 1); err != nil {
+			return fmt.Errorf("failed to scale up machine-controller-manager: %w", err)
+		}
 	}
 
 	// Finally reconcile the worker so that the machine-controller-manager gets scaled up and OwnerReferences between
