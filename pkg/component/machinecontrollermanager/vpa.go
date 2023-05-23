@@ -15,7 +15,7 @@
 package machinecontrollermanager
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	vpaautoscalingv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 )
 
@@ -24,7 +24,7 @@ import (
 // This function can be used in provider specific
 // machine-controller-manager implementations, when a meaningful
 // default container policy is required.
-func GetVPAContainerPolicy(namespace, providerName string, minAllowed, maxAllowed v1.ResourceList) vpaautoscalingv1.ContainerResourcePolicy {
+func GetVPAContainerPolicy(namespace, providerName string, minAllowed, maxAllowed corev1.ResourceList) vpaautoscalingv1.ContainerResourcePolicy {
 
 	var ccv = vpaautoscalingv1.ContainerControlledValuesRequestsOnly
 	return vpaautoscalingv1.ContainerResourcePolicy{
