@@ -98,12 +98,12 @@ func (e *ensurer) EnsureMachineControllerManagerVPA(ctx context.Context, gctx ex
 		return nil
 	}
 
-	minAllowed := v1.ResourceList{
-		v1.ResourceMemory: resource.MustParse("64Mi"),
+	minAllowed := corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
 	}
-	maxAllowed := v1.ResourceList{
-		v1.ResourceCPU:    resource.MustParse("2"),
-		v1.ResourceMemory: resource.MustParse("5G"),
+	maxAllowed := corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("2"),
+		corev1.ResourceMemory: resource.MustParse("5G"),
 	}
 
 	containerResourcePolicy := machinecontrollermanager.GetVPAContainerPolicy(newObj.Namespace, "provider-local", minAllowed, maxAllowed)
