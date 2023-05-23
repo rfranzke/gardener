@@ -315,7 +315,7 @@ func containerWithNameIndex(items []corev1.Container, name string) int {
 	return -1
 }
 
-func containerResourcePolicyWithNameIndex(items []v1.ContainerResourcePolicy, name string) int {
+func vpaContainerResourcePolicyWithNameIndex(items []vpaautoscalingv1.ContainerResourcePolicy, name string) int {
 	for i, item := range items {
 		if item.ContainerName == name {
 			return i
