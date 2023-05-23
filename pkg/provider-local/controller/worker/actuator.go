@@ -30,10 +30,10 @@ import (
 	kubernetesclient "github.com/gardener/gardener/pkg/client/kubernetes"
 	api "github.com/gardener/gardener/pkg/provider-local/apis/local"
 	"github.com/gardener/gardener/pkg/provider-local/apis/local/helper"
-	"github.com/gardener/gardener/pkg/provider-local/imagevector"
+	localimagevector "github.com/gardener/gardener/pkg/provider-local/imagevector"
 	"github.com/gardener/gardener/pkg/provider-local/local"
 	"github.com/gardener/gardener/pkg/utils/chart"
-	gardenerimagevector "github.com/gardener/gardener/pkg/utils/imagevector"
+	"github.com/gardener/gardener/pkg/utils/imagevector"
 )
 
 type delegateFactory struct {
@@ -50,7 +50,7 @@ func NewActuator(manageMCM bool) worker.Actuator {
 		mcmName              string
 		mcmChartSeed         *chart.Chart
 		mcmChartShoot        *chart.Chart
-		imageVector          gardenerimagevector.ImageVector
+		imageVector          imagevector.ImageVector
 		chartRendererFactory extensionscontroller.ChartRendererFactory
 	)
 
@@ -58,7 +58,7 @@ func NewActuator(manageMCM bool) worker.Actuator {
 		mcmName = local.MachineControllerManagerName
 		mcmChartSeed = mcmChart
 		mcmChartShoot = mcmShootChart
-		imageVector = imagevector.ImageVector()
+		imageVector = localimagevector.ImageVector()
 		chartRendererFactory = extensionscontroller.ChartRendererFactoryFunc(util.NewChartRendererForShoot)
 	}
 
