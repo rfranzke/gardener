@@ -150,6 +150,8 @@ func (a *authorizer) Authorize(_ context.Context, attrs auth.Attributes) (auth.D
 				[]string{"status"},
 			)
 		case controllerRegistrationResource:
+			// TODO(rfranzke): Revisit usages in gardenlet code and consider replacing LIST requests in favor of
+			//  GETs.
 			return a.authorize(requestLog, seedName, graph.VertexTypeControllerRegistration, attrs,
 				nil,
 				[]string{"get", "list", "watch"},
