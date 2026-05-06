@@ -126,7 +126,8 @@ func (r *Reconciler) reconcileShoot(ctx context.Context, log logr.Logger, shoot 
 	}
 
 	r.Recorder.Eventf(shoot, nil, corev1.EventTypeNormal, gardencorev1beta1.EventReconciling, gardencorev1beta1.EventActionReconcile, "%s Shoot cluster", utils.IifString(isRestoring, "Restoring", "Reconciling"))
-	if flowErr := r.runReconcileShootFlow(ctx, o, operationType); flowErr != nil {
+	if err := r.runReconcileShootFlow(ctx, o, operationType); err != nil {
+		flowErr := v1beta1helper.NewWrappedLastErrors(v1beta1helper.FormatLastErrDescription(err), err)
 		r.Recorder.Eventf(shoot, nil, corev1.EventTypeWarning, gardencorev1beta1.EventReconcileError, gardencorev1beta1.EventActionReconcile, flowErr.Description)
 		updateErr := r.patchShootStatusOperationError(ctx, shoot, flowErr.Description, operationType, false, flowErr.LastErrors...)
 		return reconcile.Result{}, errorsutils.WithSuppressed(errors.New(flowErr.Description), updateErr)
