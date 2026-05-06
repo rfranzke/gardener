@@ -32,11 +32,16 @@ func (b *Botanist) DefaultResourceManager() (resourcemanager.Interface, error) {
 		defaultUnreachableTolerationSeconds = b.Config.NodeToleration.DefaultUnreachableTolerationSeconds
 	}
 
+	clusterIdentity := b.Shoot.GetInfo().Status.ClusterIdentity
+	if !b.Shoot.IsSelfHosted() {
+		clusterIdentity = b.Seed.GetInfo().Status.ClusterIdentity
+	}
+
 	var (
 		newFunc = shared.NewTargetGardenerResourceManager
 
 		values = resourcemanager.Values{
-			ClusterIdentity:                           b.Seed.GetInfo().Status.ClusterIdentity,
+			ClusterIdentity:                           clusterIdentity,
 			HighAvailabilityConfigWebhookEnabled:      true,
 			DefaultNotReadyToleration:                 defaultNotReadyTolerationSeconds,
 			DefaultUnreachableToleration:              defaultUnreachableTolerationSeconds,
@@ -51,7 +56,7 @@ func (b *Botanist) DefaultResourceManager() (resourcemanager.Interface, error) {
 			// MatchLabelKeysInPodTopologySpread feature gate is locked to true.
 			PodTopologySpreadConstraintsEnabled: gardenerutils.IsMatchLabelKeysInPodTopologySpreadFeatureGateDisabled(b.Shoot.GetInfo()),
 			PriorityClassName:                   v1beta1constants.PriorityClassNameShootControlPlane400,
-			RuntimeKubernetesVersion:            b.Seed.KubernetesVersion,
+			RuntimeKubernetesVersion:            b.Shoot.RuntimeKubernetesVersion,
 			SchedulingProfile:                   v1beta1helper.ShootSchedulingProfile(b.Shoot.GetInfo()),
 			SecretNameServerCA:                  v1beta1constants.SecretNameCACluster,
 			SystemComponentTolerations:          gardenerutils.ExtractSystemComponentsTolerations(b.Shoot.GetInfo().Spec.Provider.Workers),
@@ -83,6 +88,20 @@ func (b *Botanist) DefaultResourceManager() (resourcemanager.Interface, error) {
 	}
 
 	return newFunc(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.SecretsManager, values)
+}
+
+// DefaultRuntimeGardenerResourceManager returns the gardener-resource-manager component for deploying it to the garden
+// namespace.
+func (b *Botanist) DefaultRuntimeGardenerResourceManager() (resourcemanager.Interface, error) {
+	return shared.NewRuntimeGardenerResourceManager(b.SeedClientSet.Client(), v1beta1constants.GardenNamespace, b.SecretsManager, resourcemanager.Values{
+		DefaultSeccompProfileEnabled:         features.DefaultFeatureGate.Enabled(features.DefaultSeccompProfile),
+		SystemComponentsConfigWebhookEnabled: true,
+		HighAvailabilityConfigWebhookEnabled: true,
+		PriorityClassName:                    v1beta1constants.PriorityClassNameShootControlPlane400,
+		SecretNameServerCA:                   v1beta1constants.SecretNameCACluster,
+		SystemComponentTolerations:           gardenerutils.ExtractSystemComponentsTolerations(b.Shoot.GetInfo().Spec.Provider.Workers),
+		VPAInPlaceUpdatesEnabled:             features.DefaultFeatureGate.Enabled(features.VPAInPlaceUpdates),
+	})
 }
 
 // DeployGardenerResourceManager deploys the gardener-resource-manager

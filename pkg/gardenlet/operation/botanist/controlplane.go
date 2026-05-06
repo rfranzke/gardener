@@ -6,7 +6,9 @@ package botanist
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	proberapi "github.com/gardener/dependency-watchdog/api/prober"
@@ -227,4 +229,51 @@ func waitUntilNoPodsExistAnymore(ctx context.Context, c client.Client, namespace
 		})
 	}
 	return flow.Parallel(fns...)(ctx)
+}
+
+// ControlPlaneNodeAddresses contains IP address and hostname of the control plane nodes.
+type ControlPlaneNodeAddresses struct {
+	// InternalIP is the internal IP of the node.
+	InternalIP net.IP
+	// HostName is the hostname of the node.
+	HostName string
+}
+
+// GetControlPlaneNodeAddresses returns the addresses (hostname and internal IP) of all control plane nodes in the
+// cluster.
+func (b *Botanist) GetControlPlaneNodeAddresses(ctx context.Context) ([]ControlPlaneNodeAddresses, error) {
+	controlPlaneNodeList := &corev1.NodeList{}
+	if err := b.SeedClientSet.Client().List(ctx, controlPlaneNodeList, client.MatchingLabels{"node-role.kubernetes.io/control-plane": ""}); err != nil {
+		return nil, fmt.Errorf("failed to list control plane nodes: %w", err)
+	}
+
+	if len(controlPlaneNodeList.Items) == 0 {
+		return nil, errors.New("no control plane nodes found")
+	}
+
+	controlPlaneNodeAddresses := make([]ControlPlaneNodeAddresses, 0, len(controlPlaneNodeList.Items))
+
+	for _, node := range controlPlaneNodeList.Items {
+		addresses := ControlPlaneNodeAddresses{}
+
+		for _, address := range node.Status.Addresses {
+			switch address.Type {
+			case corev1.NodeInternalIP:
+				addresses.InternalIP = net.ParseIP(address.Address)
+			case corev1.NodeHostName:
+				addresses.HostName = address.Address
+			}
+		}
+
+		if addresses.InternalIP == nil {
+			return nil, fmt.Errorf("failed to determine internal IP of node %q", node.Name)
+		}
+		if addresses.HostName == "" {
+			return nil, fmt.Errorf("failed to determine hostname of node %q", node.Name)
+		}
+
+		controlPlaneNodeAddresses = append(controlPlaneNodeAddresses, addresses)
+	}
+
+	return controlPlaneNodeAddresses, nil
 }

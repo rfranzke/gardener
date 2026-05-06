@@ -159,7 +159,7 @@ var _ = Describe("Cluster", func() {
 					CloudProfile: runtime.RawExtension{
 						Object: expectedCloudProfile,
 					},
-					Seed: runtime.RawExtension{
+					Seed: &runtime.RawExtension{
 						Object: expectedSeed,
 					},
 					Shoot: runtime.RawExtension{
@@ -257,7 +257,7 @@ var _ = Describe("Cluster", func() {
 					Name: "foo",
 				},
 				Spec: extensionsv1alpha1.ClusterSpec{
-					Seed: runtime.RawExtension{
+					Seed: &runtime.RawExtension{
 						Raw: encode(expectedSeed),
 					},
 				},

@@ -29,6 +29,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/extensions/network"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/component/extensions/worker"
+	"github.com/gardener/gardener/pkg/component/garden/backupbucket"
 	"github.com/gardener/gardener/pkg/component/garden/backupentry"
 	"github.com/gardener/gardener/pkg/component/gardener/resourcemanager"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
@@ -78,7 +79,11 @@ type Shoot struct {
 
 	// ControlPlaneNamespace is the namespace in which the control plane components run.
 	ControlPlaneNamespace string
-	KubernetesVersion     *semver.Version
+	// KubernetesVersion is the desired .spec.kubernetes.version defined in the ShootSpec.
+	KubernetesVersion *semver.Version
+	// RuntimeKubernetesVersion is the Kubernetes version of the seed cluster, or the current Kubernetes version of the
+	// self-hosted shoot cluster (retrieved from the API servers).
+	RuntimeKubernetesVersion *semver.Version
 
 	// InternalClusterDomain is empty for self-hosted shoots, which only have an external domain (Shoot.spec.dns.domain).
 	InternalClusterDomain *string
@@ -114,6 +119,7 @@ type Shoot struct {
 
 // Components contains different components deployed in the Shoot cluster.
 type Components struct {
+	BackupBucket             backupbucket.Interface
 	BackupEntry              backupentry.Interface
 	SourceBackupEntry        backupentry.Interface
 	ControlPlane             *ControlPlane
@@ -129,6 +135,7 @@ type ControlPlane struct {
 	Alertmanager             alertmanager.Interface
 	BlackboxExporter         component.DeployWaiter
 	ClusterAutoscaler        clusterautoscaler.Interface
+	EtcdDruid                component.DeployWaiter
 	EtcdMain                 etcd.Interface
 	EtcdEvents               etcd.Interface
 	EtcdCopyBackupsTask      etcdcopybackupstask.Interface
@@ -143,12 +150,15 @@ type ControlPlane struct {
 	MachineControllerManager machinecontrollermanager.Interface
 	Plutono                  plutono.Interface
 	Prometheus               prometheus.Interface
-	ResourceManager          resourcemanager.Interface
-	Vali                     vali.Interface
-	OtelCollector            collector.Interface
-	VictoriaLogs             component.DeployWaiter
-	VerticalPodAutoscaler    vpa.Interface
-	VPNSeedServer            vpnseedserver.Interface
+	// RuntimeResourceManager is the gardener-resource-manager instance responsible for runtime operations running in
+	// the garden namespace (only set for self-hosted shoots).
+	RuntimeResourceManager resourcemanager.Interface
+	ResourceManager        resourcemanager.Interface
+	Vali                   vali.Interface
+	OtelCollector          collector.Interface
+	VictoriaLogs           component.DeployWaiter
+	VerticalPodAutoscaler  vpa.Interface
+	VPNSeedServer          vpnseedserver.Interface
 }
 
 // Extensions contains references to extension resources.

@@ -28,7 +28,6 @@ import (
 	mockkubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/mock"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	. "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
-	seedpkg "github.com/gardener/gardener/pkg/gardenlet/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 	mockclient "github.com/gardener/gardener/third_party/mock/controller-runtime/client"
 )
@@ -47,12 +46,10 @@ var _ = Describe("ClusterAutoscaler", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		kubernetesClient = kubernetesmock.NewMockInterface(ctrl)
 		botanist = &Botanist{Operation: &operation.Operation{}}
-		botanist.Seed = &seedpkg.Seed{
-			KubernetesVersion: semver.MustParse("1.35.0"),
-		}
 		botanist.Shoot = &shootpkg.Shoot{
-			Networks:     &shootpkg.Networks{},
-			CloudProfile: &gardencorev1beta1.CloudProfile{},
+			RuntimeKubernetesVersion: semver.MustParse("1.35.0"),
+			Networks:                 &shootpkg.Networks{},
+			CloudProfile:             &gardencorev1beta1.CloudProfile{},
 		}
 		botanist.SeedClientSet = kubernetesClient
 	})

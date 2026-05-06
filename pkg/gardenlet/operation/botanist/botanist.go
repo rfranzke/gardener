@@ -70,7 +70,7 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 
 	o.Shoot.Components.Extensions.Extension, err = b.DefaultExtension(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.Extensions.Extension, err =: %w", err)
 	}
 	if !o.Shoot.IsWorkerless {
 		o.Shoot.Components.Extensions.ContainerRuntime = b.DefaultContainerRuntime()
@@ -79,96 +79,126 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 		o.Shoot.Components.Extensions.Network = b.DefaultNetwork()
 		o.Shoot.Components.Extensions.OperatingSystemConfig, err = b.DefaultOperatingSystemConfig()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.Extensions.OperatingSystemConfig, err: %w", err)
 		}
 		o.Shoot.Components.Extensions.Worker = b.DefaultWorker()
 	}
 
 	// control plane components
-	o.Shoot.Components.ControlPlane.Alertmanager, err = b.DefaultAlertmanager()
-	if err != nil {
-		return nil, err
-	}
-	o.Shoot.Components.ControlPlane.BlackboxExporter, err = b.DefaultBlackboxExporterControlPlane()
-	if err != nil {
-		return nil, err
+	// TODO(rfranzke): Enable this once the observability components are ready for self-hosted shoots.
+	if !o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.ControlPlane.Alertmanager, err = b.DefaultAlertmanager()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.Alertmanager, err: %w", err)
+		}
+		o.Shoot.Components.ControlPlane.BlackboxExporter, err = b.DefaultBlackboxExporterControlPlane()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.BlackboxExporter, err: %w", err)
+		}
 	}
 	o.Shoot.Components.ControlPlane.EtcdCopyBackupsTask = b.DefaultEtcdCopyBackupsTask()
+
+	if o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.ControlPlane.EtcdDruid, err = b.DefaultEtcdDruid()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.EtcdDruid, err: %w", err)
+		}
+	}
+
 	o.Shoot.Components.ControlPlane.EtcdMain, err = b.DefaultEtcd(v1beta1constants.ETCDRoleMain, etcd.ClassImportant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.EtcdMain, err = b.DefaultEtcd(v1beta1constants: %w", err)
 	}
 	o.Shoot.Components.ControlPlane.EtcdEvents, err = b.DefaultEtcd(v1beta1constants.ETCDRoleEvents, etcd.ClassNormal)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.EtcdEvents, err = b.DefaultEtcd(v1beta1constants: %w", err)
 	}
 	o.Shoot.Components.ControlPlane.EventLogger, err = b.DefaultEventLogger()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.EventLogger, err: %w", err)
 	}
 	o.Shoot.Components.ControlPlane.IstioBasicAuthServer, err = b.DefaultIstioBasicAuthServer()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.IstioBasicAuthServer, err: %w", err)
 	}
 	o.Shoot.Components.ControlPlane.KubeAPIServerService = b.DefaultKubeAPIServerService()
 	o.Shoot.Components.ControlPlane.KubeAPIServerSNI = b.DefaultKubeAPIServerSNI()
 	o.Shoot.Components.ControlPlane.KubeAPIServer, err = b.DefaultKubeAPIServer(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.KubeAPIServer, err =: %w", err)
 	}
 	o.Shoot.Components.ControlPlane.KubeControllerManager, err = b.DefaultKubeControllerManager()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.KubeControllerManager, err: %w", err)
 	}
-	o.Shoot.Components.ControlPlane.KubeStateMetrics, err = b.DefaultKubeStateMetrics()
-	if err != nil {
-		return nil, err
+
+	// TODO(rfranzke): Enable this once the observability components are ready for self-hosted shoots.
+	if !o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.ControlPlane.KubeStateMetrics, err = b.DefaultKubeStateMetrics()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.KubeStateMetrics, err: %w", err)
+		}
+		o.Shoot.Components.ControlPlane.Plutono, err = b.DefaultPlutono()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.Plutono, err: %w", err)
+		}
+		o.Shoot.Components.ControlPlane.Prometheus, err = b.DefaultPrometheus()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.Prometheus, err: %w", err)
+		}
 	}
-	o.Shoot.Components.ControlPlane.Plutono, err = b.DefaultPlutono()
-	if err != nil {
-		return nil, err
+
+	if o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.ControlPlane.RuntimeResourceManager, err = b.DefaultRuntimeGardenerResourceManager()
+		if err != nil {
+			return nil, fmt.Errorf("failed creating runtime gardener resource manager: %w", err)
+		}
 	}
-	o.Shoot.Components.ControlPlane.Prometheus, err = b.DefaultPrometheus()
-	if err != nil {
-		return nil, err
-	}
+
 	o.Shoot.Components.ControlPlane.ResourceManager, err = b.DefaultResourceManager()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.ResourceManager, err: %w", err)
 	}
+
 	if !o.Shoot.IsWorkerless {
 		o.Shoot.Components.ControlPlane.ClusterAutoscaler, err = b.DefaultClusterAutoscaler()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.ClusterAutoscaler, err: %w", err)
 		}
 		o.Shoot.Components.ControlPlane.KubeScheduler, err = b.DefaultKubeScheduler()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.KubeScheduler, err: %w", err)
 		}
 		o.Shoot.Components.ControlPlane.VerticalPodAutoscaler, err = b.DefaultVerticalPodAutoscaler()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.VerticalPodAutoscaler, err: %w", err)
 		}
-		o.Shoot.Components.ControlPlane.VPNSeedServer, err = b.DefaultVPNSeedServer()
-		if err != nil {
-			return nil, err
+		if !o.Shoot.IsSelfHosted() {
+			o.Shoot.Components.ControlPlane.VPNSeedServer, err = b.DefaultVPNSeedServer()
+			if err != nil {
+				return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.VPNSeedServer, err: %w", err)
+			}
 		}
 		o.Shoot.Components.ControlPlane.MachineControllerManager, err = b.DefaultMachineControllerManager()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.MachineControllerManager, err: %w", err)
 		}
 	}
-	o.Shoot.Components.ControlPlane.Vali, err = b.DefaultVali()
-	if err != nil {
-		return nil, err
-	}
-	o.Shoot.Components.ControlPlane.OtelCollector, err = b.DefaultOtelCollector()
-	if err != nil {
-		return nil, err
-	}
-	o.Shoot.Components.ControlPlane.VictoriaLogs, err = b.DefaultVictoriaLogs()
-	if err != nil {
-		return nil, err
+
+	// TODO(rfranzke): Enable this once the observability components are ready for self-hosted shoots.
+	if !o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.ControlPlane.Vali, err = b.DefaultVali()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.Vali, err: %w", err)
+		}
+		o.Shoot.Components.ControlPlane.OtelCollector, err = b.DefaultOtelCollector()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.OtelCollector, err: %w", err)
+		}
+		o.Shoot.Components.ControlPlane.VictoriaLogs, err = b.DefaultVictoriaLogs()
+		if err != nil {
+			return nil, fmt.Errorf("failed o.Shoot.Components.ControlPlane.VictoriaLogs, err: %w", err)
+		}
 	}
 
 	// system components
@@ -177,48 +207,60 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	o.Shoot.Components.SystemComponents.ClusterIdentity = b.DefaultClusterIdentity()
 
 	if !o.Shoot.IsWorkerless {
-		o.Shoot.Components.SystemComponents.APIServerProxy, err = b.DefaultAPIServerProxy()
-		if err != nil {
-			return nil, err
-		}
+		if !o.Shoot.IsSelfHosted() {
+			o.Shoot.Components.SystemComponents.APIServerProxy, err = b.DefaultAPIServerProxy()
+			if err != nil {
+				return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.APIServerProxy, err: %w", err)
+			}
 
-		o.Shoot.Components.SystemComponents.BlackboxExporter, err = b.DefaultBlackboxExporterCluster()
-		if err != nil {
-			return nil, err
+			// TODO(rfranzke): Enable this once the observability components are ready for self-hosted shoots.
+			o.Shoot.Components.SystemComponents.BlackboxExporter, err = b.DefaultBlackboxExporterCluster()
+			if err != nil {
+				return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.BlackboxExporter, err: %w", err)
+			}
 		}
 
 		o.Shoot.Components.SystemComponents.CoreDNS, err = b.DefaultCoreDNS()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.CoreDNS, err: %w", err)
 		}
 		o.Shoot.Components.SystemComponents.NodeLocalDNS, err = b.DefaultNodeLocalDNS()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.NodeLocalDNS, err: %w", err)
 		}
 		o.Shoot.Components.SystemComponents.MetricsServer, err = b.DefaultMetricsServer()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.MetricsServer, err: %w", err)
 		}
-		o.Shoot.Components.SystemComponents.VPNShoot, err = b.DefaultVPNShoot()
-		if err != nil {
-			return nil, err
+
+		if !o.Shoot.IsSelfHosted() {
+			o.Shoot.Components.SystemComponents.VPNShoot, err = b.DefaultVPNShoot()
+			if err != nil {
+				return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.VPNShoot, err: %w", err)
+			}
+
+			// TODO(rfranzke): Enable this once the observability components are ready for self-hosted shoots.
+			o.Shoot.Components.SystemComponents.NodeExporter, err = b.DefaultNodeExporter()
+			if err != nil {
+				return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.NodeExporter, err: %w", err)
+			}
 		}
+
 		o.Shoot.Components.SystemComponents.NodeProblemDetector, err = b.DefaultNodeProblemDetector()
 		if err != nil {
-			return nil, err
-		}
-		o.Shoot.Components.SystemComponents.NodeExporter, err = b.DefaultNodeExporter()
-		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.NodeProblemDetector, err: %w", err)
 		}
 		o.Shoot.Components.SystemComponents.KubeProxy, err = b.DefaultKubeProxy()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.SystemComponents.KubeProxy, err: %w", err)
 		}
 	}
 
 	// other components
 	o.Shoot.Components.SourceBackupEntry = b.SourceBackupEntry()
+	if o.Shoot.IsSelfHosted() {
+		o.Shoot.Components.BackupBucket = b.DefaultCoreBackupBucket()
+	}
 	o.Shoot.Components.BackupEntry = b.DefaultCoreBackupEntry()
 	o.Shoot.Components.GardenerAccess = b.DefaultGardenerAccess()
 	if !o.Shoot.IsWorkerless {
@@ -229,11 +271,11 @@ func New(ctx context.Context, o *operation.Operation) (*Botanist, error) {
 	if !o.Shoot.IsWorkerless {
 		o.Shoot.Components.Addons.KubernetesDashboard, err = b.DefaultKubernetesDashboard()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.Addons.KubernetesDashboard, err: %w", err)
 		}
 		o.Shoot.Components.Addons.NginxIngress, err = b.DefaultNginxIngress()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed o.Shoot.Components.Addons.NginxIngress, err: %w", err)
 		}
 	}
 
@@ -259,9 +301,9 @@ func (b *Botanist) RequiredExtensionsReady(ctx context.Context) error {
 	if err := b.GardenClient.List(ctx, controllerRegistrationList); err != nil {
 		return err
 	}
-	requiredExtensions := gardenerutils.ComputeRequiredExtensionsForShoot(b.Shoot.GetInfo(), b.Seed.GetInfo(), controllerRegistrationList, b.Garden.InternalDomain, b.Shoot.ExternalDomain)
+	requiredExtensions := gardenerutils.ComputeRequiredExtensionsForShoot(b.Shoot.GetInfo(), b.GetSeed(), controllerRegistrationList, b.Garden.InternalDomain, b.Shoot.ExternalDomain)
 
-	return gardenerutils.RequiredExtensionsReady(ctx, b.GardenClient, b.Seed.GetInfo().Name, requiredExtensions)
+	return gardenerutils.RequiredExtensionsReady(ctx, b.GardenClient, b.GetSeed(), b.Shoot.GetInfo(), requiredExtensions)
 }
 
 // outOfClusterAPIServerFQDN returns the Fully Qualified Domain Name of the apiserver

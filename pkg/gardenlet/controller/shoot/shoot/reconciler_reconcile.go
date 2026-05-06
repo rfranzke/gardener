@@ -21,8 +21,10 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap/keys"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
+	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
 	"github.com/gardener/gardener/pkg/component/shared"
 	"github.com/gardener/gardener/pkg/controllerutils"
+	gardenerextensions "github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/shoot/shoot/helper"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
@@ -31,6 +33,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils/errors"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	gardenletutils "github.com/gardener/gardener/pkg/utils/gardener/gardenlet"
 	"github.com/gardener/gardener/pkg/utils/gardener/secretsrotation"
 	"github.com/gardener/gardener/pkg/utils/gardener/shootstate"
 	"github.com/gardener/gardener/pkg/utils/gardener/tokenrequest"
@@ -60,18 +63,15 @@ type flowContext struct {
 // runReconcileShootFlow reconciles the Shoot cluster.
 // It receives an Operation object <o> which stores the Shoot object.
 func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Operation, operationType gardencorev1beta1.LastOperationType) error {
-	// We create the botanists (which will do the actual work).
 	var (
 		b               *botanistpkg.Botanist
 		worker          *extensionsv1alpha1.Worker
-		err             error
 		tasksWithErrors []string
 	)
 
 	c := flowContext{
 		operationType:                  operationType,
-		allowBackup:                    o.Seed.GetInfo().Spec.Backup != nil,
-		hasNodesCIDR:                   o.Shoot.GetInfo().Spec.Networking != nil && o.Shoot.GetInfo().Spec.Networking.Nodes != nil && (o.Shoot.GetInfo().Status.Networking != nil || skipReadiness),
+		allowBackup:                    v1beta1helper.GetBackupConfigForShoot(o.Shoot.GetInfo(), o.GetSeed()) != nil,
 		requestControlPlanePodsRestart: controllerutils.HasTask(o.Shoot.GetInfo().Annotations, v1beta1constants.ShootTaskRestartControlPlanePods),
 		kubeProxyEnabled:               v1beta1helper.KubeProxyEnabled(o.Shoot.GetInfo().Spec.Kubernetes.KubeProxy),
 		deployKubeAPIServerTaskTimeout: defaultTimeout,
@@ -80,16 +80,16 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 		isRestoring:                    operationType == gardencorev1beta1.LastOperationTypeRestore,
 		isRestoringHAControlPlane:      o.Shoot.IsRestorePhase() && v1beta1helper.IsHAControlPlaneConfigured(o.Shoot.GetInfo()),
 	}
+	c.hasNodesCIDR = o.Shoot.GetInfo().Spec.Networking != nil && o.Shoot.GetInfo().Spec.Networking.Nodes != nil && (o.Shoot.GetInfo().Status.Networking != nil || c.skipReadiness)
 
-	for _, lastError := range b.Shoot.GetInfo().Status.LastErrors {
+	for _, lastError := range o.Shoot.GetInfo().Status.LastErrors {
 		if lastError.TaskID != nil {
 			tasksWithErrors = append(tasksWithErrors, *lastError.TaskID)
 		}
 	}
 
 	errorContext := errors.NewErrorContext(fmt.Sprintf("Shoot cluster %s", utils.IifString(c.isRestoring, "restoration", "reconciliation")), tasksWithErrors)
-
-	err = errors.HandleErrors(errorContext,
+	if err := errors.HandleErrors(errorContext,
 		func(errorID string) error {
 			o.CleanShootTaskError(ctx, errorID)
 			return nil
@@ -108,6 +108,7 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			return b.WaitUntilRequiredExtensionsReady(ctx)
 		}),
 		errors.ToExecute("Check if copy of backups is required", func() error {
+			var err error
 			c.isCopyOfBackupsRequired, err = b.IsCopyOfBackupsRequired(ctx)
 			return err
 		}),
@@ -125,8 +126,7 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 			worker = obj
 			return nil
 		}),
-	)
-	if err != nil {
+	); err != nil {
 		return err
 	}
 
@@ -208,6 +208,239 @@ func (r *Reconciler) runReconcileShootFlow(ctx context.Context, o *operation.Ope
 }
 
 func (r *Reconciler) setupReconcileSelfHostedShootFlow(ctx context.Context, b *botanistpkg.Botanist, c flowContext, g *flow.Graph) error {
+	// If the self-hosted shoot is also the garden runtime cluster, then gardener-operator is taking over
+	// responsibility of some components (e.g., etcd-druid). Detect this by checking whether a Garden resource exists.
+	shootIsGarden, err := gardenletutils.ClusterIsGarden(ctx, b.SeedClientSet.Client())
+	if err != nil {
+		return fmt.Errorf("failed checking whether shoot is garden: %w", err)
+	}
+
+	var (
+		deployControlPlaneNamespace = g.Add(flow.Task{
+			Name: "Deploying control plane namespace",
+			Fn:   b.DeployControlPlaneNamespace,
+		})
+		deployGardenNamespace = g.Add(flow.Task{
+			Name: "Deploying garden namespace",
+			Fn: func(ctx context.Context) error {
+				return gardenerutils.ReconcileGardenNamespace(ctx, b.SeedClientSet.Client(), v1beta1constants.GardenNamespace, v1beta1helper.ControlPlaneWorkerPoolForShoot(b.Shoot.GetInfo().Spec.Provider.Workers).Zones, true, nil)
+			},
+		})
+		deployCloudProviderSecret = g.Add(flow.Task{
+			Name:         "Deploying cloud provider account secret",
+			Fn:           b.DeployCloudProviderSecret,
+			SkipIf:       b.Shoot.Credentials == nil,
+			Dependencies: flow.NewTaskIDs(deployControlPlaneNamespace),
+		})
+		reconcileCustomResourceDefinitions = b.ReconcileCustomResourceDefinitions(g)
+		reconcileClusterResource           = g.Add(flow.Task{
+			Name: "Reconciling extensions.gardener.cloud/v1alpha1.Cluster resource",
+			Fn: func(ctx context.Context) error {
+				return gardenerextensions.SyncClusterResourceToSeed(ctx, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.Shoot.GetInfo(), b.Shoot.CloudProfile, b.GetSeed())
+			},
+			Dependencies: flow.NewTaskIDs(reconcileCustomResourceDefinitions),
+		})
+		initializeSecretsManagement = g.Add(flow.Task{
+			Name:         "Initializing secrets management",
+			Fn:           b.InitializeSecretsManagement,
+			Dependencies: flow.NewTaskIDs(reconcileClusterResource),
+		})
+		deployGardenerResourceManager = g.Add(flow.Task{
+			Name: "Deploying gardener-resource-manager",
+			Fn: func(ctx context.Context) error {
+				b.Shoot.Components.ControlPlane.RuntimeResourceManager.SetBootstrapControlPlaneNode(false)
+				b.Shoot.Components.ControlPlane.ResourceManager.SetBootstrapControlPlaneNode(false)
+
+				if shootIsGarden {
+					return b.Shoot.Components.ControlPlane.ResourceManager.Deploy(ctx)
+				}
+
+				return flow.Parallel(
+					b.Shoot.Components.ControlPlane.RuntimeResourceManager.Deploy,
+					b.Shoot.Components.ControlPlane.ResourceManager.Deploy,
+				)(ctx)
+			},
+			Dependencies: flow.NewTaskIDs(deployGardenNamespace, initializeSecretsManagement),
+		})
+		waitUntilGardenerResourceManagerReady = g.Add(flow.Task{
+			Name: "Waiting until gardener-resource-manager reports readiness",
+			Fn: func(ctx context.Context) error {
+				if shootIsGarden {
+					return b.Shoot.Components.ControlPlane.ResourceManager.Wait(ctx)
+				}
+
+				return flow.Parallel(
+					b.Shoot.Components.ControlPlane.RuntimeResourceManager.Wait,
+					b.Shoot.Components.ControlPlane.ResourceManager.Wait,
+				)(ctx)
+			},
+			Dependencies: flow.NewTaskIDs(deployGardenerResourceManager),
+		})
+		_ = g.Add(flow.Task{
+			Name: "Deploying seed system resources",
+			Fn: func(ctx context.Context) error {
+				return seedsystem.New(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, seedsystem.Values{}).Deploy(ctx)
+			},
+			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying shoot system resources",
+			Fn:           b.DeployShootSystem,
+			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
+		})
+		deployInfrastructure = g.Add(flow.Task{
+			Name:         "Deploying Shoot infrastructure",
+			Fn:           b.DeployInfrastructure,
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(initializeSecretsManagement, deployCloudProviderSecret),
+		})
+		waitUntilInfrastructureReady = g.Add(flow.Task{
+			Name:         "Waiting until Shoot infrastructure has been reconciled",
+			Fn:           b.WaitForInfrastructure,
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(deployInfrastructure),
+		})
+		deployShootNamespaces = g.Add(flow.Task{
+			Name:         "Deploying shoot namespaces system component",
+			Fn:           b.Shoot.Components.SystemComponents.Namespaces.Deploy,
+			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
+		})
+		waitUntilShootNamespacesReady = g.Add(flow.Task{
+			Name:         "Waiting until shoot namespaces have been reconciled",
+			Fn:           b.Shoot.Components.SystemComponents.Namespaces.Wait,
+			Dependencies: flow.NewTaskIDs(deployShootNamespaces),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying kube-proxy system component",
+			Fn:           b.DeployKubeProxy,
+			SkipIf:       !c.kubeProxyEnabled,
+			Dependencies: flow.NewTaskIDs(waitUntilShootNamespacesReady, waitUntilInfrastructureReady),
+		})
+		deployNetwork = g.Add(flow.Task{
+			Name:         "Deploying shoot network plugin",
+			Fn:           b.DeployNetwork,
+			Dependencies: flow.NewTaskIDs(waitUntilShootNamespacesReady, waitUntilInfrastructureReady),
+		})
+		waitUntilNetworkReady = g.Add(flow.Task{
+			Name:         "Waiting until shoot network plugin has been reconciled",
+			Fn:           b.Shoot.Components.Extensions.Network.Wait,
+			Dependencies: flow.NewTaskIDs(deployNetwork),
+		})
+		deployCoreDNS = g.Add(flow.Task{
+			Name:         "Deploying CoreDNS system component",
+			Fn:           b.DeployCoreDNS,
+			Dependencies: flow.NewTaskIDs(waitUntilNetworkReady),
+		})
+		waitUntilCoreDNSReady = g.Add(flow.Task{
+			Name:         "Waiting until CoreDNS system component is ready",
+			Fn:           b.Shoot.Components.SystemComponents.CoreDNS.Wait,
+			Dependencies: flow.NewTaskIDs(deployCoreDNS),
+		})
+
+		syncPointBootstrapped = flow.NewTaskIDs(
+			waitUntilGardenerResourceManagerReady,
+			waitUntilCoreDNSReady,
+		)
+
+		deployBackupBucketInGarden = g.Add(flow.Task{
+			Name:         "Deploying BackupBucket for ETCD data",
+			Fn:           b.Shoot.Components.BackupBucket.Deploy,
+			SkipIf:       !c.allowBackup,
+			Dependencies: flow.NewTaskIDs(syncPointBootstrapped),
+		})
+		waitUntilBackupBucketInGardenReconciled = g.Add(flow.Task{
+			Name:         "Waiting until the backup bucket has been reconciled",
+			Fn:           b.Shoot.Components.BackupBucket.Wait,
+			SkipIf:       c.skipReadiness || !c.allowBackup,
+			Dependencies: flow.NewTaskIDs(deployBackupBucketInGarden),
+		})
+		deployBackupEntryInGarden = g.Add(flow.Task{
+			Name:         "Deploying BackupEntry for ETCD data",
+			Fn:           b.DeployBackupEntry,
+			SkipIf:       !c.allowBackup,
+			Dependencies: flow.NewTaskIDs(waitUntilBackupBucketInGardenReconciled),
+		})
+		waitUntilBackupEntryInGardenReconciled = g.Add(flow.Task{
+			Name:         "Waiting until the backup entry has been reconciled",
+			Fn:           b.Shoot.Components.BackupEntry.Wait,
+			SkipIf:       c.skipReadiness || !c.allowBackup,
+			Dependencies: flow.NewTaskIDs(deployBackupEntryInGarden),
+		})
+		deployControlPlane = g.Add(flow.Task{
+			Name:         "Deploying shoot control plane components",
+			Fn:           b.DeployControlPlane,
+			Dependencies: flow.NewTaskIDs(syncPointBootstrapped),
+		})
+		waitUntilControlPlaneReady = g.Add(flow.Task{
+			Name:         "Waiting until shoot control plane has been reconciled",
+			Fn:           b.Shoot.Components.Extensions.ControlPlane.Wait,
+			Dependencies: flow.NewTaskIDs(deployControlPlane),
+		})
+		deployEtcdDruid = g.Add(flow.Task{
+			Name:         "Deploying ETCD Druid",
+			Fn:           b.Shoot.Components.ControlPlane.EtcdDruid.Deploy,
+			SkipIf:       shootIsGarden,
+			Dependencies: flow.NewTaskIDs(syncPointBootstrapped),
+		})
+		deployEtcds = g.Add(flow.Task{
+			Name: "Deploying main and events ETCDs",
+			Fn: func(ctx context.Context) error {
+				controlPlaneAddresses, err := b.GetControlPlaneNodeAddresses(ctx)
+				if err != nil {
+					return fmt.Errorf("failed determining the control plane addresses: %w", err)
+				}
+
+				b.Shoot.Components.ControlPlane.EtcdMain.SetStaticPodControlPlaneNodesIPAddresses(controlPlaneAddresses[0].InternalIP)
+				b.Shoot.Components.ControlPlane.EtcdEvents.SetStaticPodControlPlaneNodesIPAddresses(controlPlaneAddresses[0].InternalIP)
+				return b.DeployEtcd(ctx)
+			},
+			Dependencies: flow.NewTaskIDs(deployEtcdDruid, waitUntilBackupEntryInGardenReconciled),
+		})
+		waitUntilEtcdsReady = g.Add(flow.Task{
+			Name:         "Waiting until main and event ETCDs have been reconciled",
+			Fn:           b.WaitUntilEtcdsReady,
+			Dependencies: flow.NewTaskIDs(deployEtcds),
+		})
+		deployControlPlaneDeployments = g.Add(flow.Task{
+			Name: "Deploying control plane components as Deployments/StatefulSets and updating gardener-node-agent Secret",
+			Fn: func(ctx context.Context) error {
+				return b.DeployStaticControlPlaneDeployments(ctx, false)
+			},
+			Dependencies: flow.NewTaskIDs(waitUntilControlPlaneReady, waitUntilEtcdsReady),
+		})
+		waitUntilControlPlaneDeploymentsReady = g.Add(flow.Task{
+			Name: "Waiting until control plane components (static pods) are ready",
+			Fn: func(ctx context.Context) error {
+				return b.WaitUntilOperatingSystemConfigUpdatedForAllWorkerPools(ctx, true)
+			},
+			Dependencies: flow.NewTaskIDs(deployControlPlaneDeployments),
+		})
+		deployMachineControllerManager = g.Add(flow.Task{
+			Name:         "Deploying machine-controller-manager",
+			Fn:           flow.TaskFn(b.DeployMachineControllerManager).RetryUntilTimeout(time.Second, time.Minute),
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(waitUntilControlPlaneDeploymentsReady),
+		})
+		deployWorker = g.Add(flow.Task{
+			Name:         "Deploying shoot worker pools",
+			Fn:           b.DeployWorker,
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(deployMachineControllerManager),
+		})
+		waitUntilWorkerReady = g.Add(flow.Task{
+			Name:         "Waiting until shoot worker nodes have been reconciled",
+			Fn:           b.Shoot.Components.Extensions.Worker.Wait,
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(deployWorker),
+		})
+		_ = g.Add(flow.Task{
+			Name:         "Deploying cluster-autoscaler",
+			Fn:           b.DeployClusterAutoscaler,
+			SkipIf:       !b.Shoot.HasManagedInfrastructure(),
+			Dependencies: flow.NewTaskIDs(waitUntilWorkerReady),
+		})
+	)
+
 	return nil
 }
 

@@ -41,7 +41,7 @@ func (b *Botanist) DefaultAlertmanager() (alertmanager.Interface, error) {
 		Name:               "shoot",
 		ClusterType:        component.ClusterTypeShoot,
 		PriorityClassName:  v1beta1constants.PriorityClassNameShootControlPlane100,
-		StorageCapacity:    resource.MustParse(b.Seed.GetValidVolumeSize("1Gi")),
+		StorageCapacity:    resource.MustParse(b.GetValidVolumeSize("1Gi")),
 		Replicas:           b.Shoot.GetReplicas(1),
 		AlertingSMTPSecret: b.LoadSecret(v1beta1constants.GardenRoleAlerting),
 		EmailReceivers:     emailReceivers,
@@ -105,7 +105,7 @@ func (b *Botanist) DefaultPrometheus() (prometheus.Interface, error) {
 	values := prometheus.Values{
 		Name:                "shoot",
 		PriorityClassName:   v1beta1constants.PriorityClassNameShootControlPlane100,
-		StorageCapacity:     resource.MustParse(b.Seed.GetValidVolumeSize("20Gi")),
+		StorageCapacity:     resource.MustParse(b.GetValidVolumeSize("20Gi")),
 		ClusterType:         component.ClusterTypeShoot,
 		Replicas:            b.Shoot.GetReplicas(1),
 		Retention:           ptr.To(monitoringv1.Duration("30d")),

@@ -7,9 +7,9 @@ package updaterestriction
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
@@ -35,7 +35,7 @@ func (h *Handler) Handle(_ context.Context, req admission.Request) admission.Res
 		return admission.Allowed("system:serviceaccount:kube-system:gardener-internal is allowed to update system resources")
 	}
 
-	if slices.Contains(req.UserInfo.Groups, v1beta1constants.SeedsGroup) {
+	if sets.New(req.UserInfo.Groups...).HasAny(v1beta1constants.SeedsGroup, v1beta1constants.ShootsGroup) {
 		return admission.Allowed("gardenlet is allowed to modify system resources")
 	}
 

@@ -28,7 +28,6 @@ import (
 	mockkubecontrollermanager "github.com/gardener/gardener/pkg/component/kubernetes/controllermanager/mock"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	. "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
-	seedpkg "github.com/gardener/gardener/pkg/gardenlet/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 	mockclient "github.com/gardener/gardener/third_party/mock/controller-runtime/client"
 )
@@ -60,12 +59,10 @@ var _ = Describe("KubeControllerManager", func() {
 		BeforeEach(func() {
 			botanist.Logger = logr.Discard()
 			botanist.SeedClientSet = kubernetesClient
-			botanist.Seed = &seedpkg.Seed{
-				KubernetesVersion: semver.MustParse("1.31.0"),
-			}
 			botanist.Shoot = &shootpkg.Shoot{
-				KubernetesVersion: semver.MustParse("1.31.0"),
-				Networks:          &shootpkg.Networks{},
+				RuntimeKubernetesVersion: semver.MustParse("1.31.0"),
+				KubernetesVersion:        semver.MustParse("1.31.0"),
+				Networks:                 &shootpkg.Networks{},
 			}
 			botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{})
 		})

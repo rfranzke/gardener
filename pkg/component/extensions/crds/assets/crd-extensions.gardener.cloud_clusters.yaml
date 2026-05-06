@@ -65,7 +65,6 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
             required:
             - cloudProfile
-            - seed
             - shoot
             type: object
         required:

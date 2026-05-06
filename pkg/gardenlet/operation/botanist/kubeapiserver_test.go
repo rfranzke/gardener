@@ -36,7 +36,6 @@ import (
 	mockkubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver/mock"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	"github.com/gardener/gardener/pkg/gardenlet/operation/garden"
-	seedpkg "github.com/gardener/gardener/pkg/gardenlet/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -114,9 +113,6 @@ var _ = Describe("KubeAPIServer", func() {
 				SeedClientSet:  seedClientSet,
 				SecretsManager: sm,
 				Garden:         &garden.Garden{},
-				Seed: &seedpkg.Seed{
-					KubernetesVersion: semver.MustParse(seedVersion),
-				},
 				Shoot: &shootpkg.Shoot{
 					ControlPlaneNamespace: controlPlaneNamespace,
 					Components: &shootpkg.Components{
@@ -131,7 +127,8 @@ var _ = Describe("KubeAPIServer", func() {
 						Pods:      podNetworks,
 						Services:  serviceNetworks,
 					},
-					KubernetesVersion: semver.MustParse("1.31.1"),
+					RuntimeKubernetesVersion: semver.MustParse(seedVersion),
+					KubernetesVersion:        semver.MustParse("1.31.1"),
 				},
 				APIServerAddress:   apiServerAddress,
 				APIServerClusterIP: apiServerClusterIP,

@@ -25,13 +25,13 @@ import (
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	v1beta1helper "github.com/gardener/gardener/pkg/api/core/v1beta1/helper"
+	gardenletconfigv1alpha1 "github.com/gardener/gardener/pkg/apis/config/gardenlet/v1alpha1"
 	gardencorev1 "github.com/gardener/gardener/pkg/apis/core/v1"
 	gardencorev1beta1 "github.com/gardener/gardener/pkg/apis/core/v1beta1"
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	fakekubernetes "github.com/gardener/gardener/pkg/client/kubernetes/fake"
 	"github.com/gardener/gardener/pkg/component/extensions/bastion"
-	"github.com/gardener/gardener/pkg/component/gardener/resourcemanager"
 	"github.com/gardener/gardener/pkg/gardenadm"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
@@ -79,9 +79,6 @@ type GardenadmBotanist struct {
 type Components struct {
 	// Bastion is only set for `gardenadm bootstrap`.
 	Bastion *bastion.Bastion
-	// RuntimeResourceManager is the gardener-resource-manager instance responsible for runtime operations running in
-	// the garden namespace.
-	RuntimeResourceManager resourcemanager.Interface
 }
 
 // Extension contains the resources needed for an extension registration.
@@ -162,12 +159,7 @@ func NewGardenadmBotanist(
 		return nil, fmt.Errorf("failed creating botanist: %w", err)
 	}
 
-	if gardenadmBotanist.Shoot.RunsControlPlane() {
-		gardenadmBotanist.Components.RuntimeResourceManager, err = gardenadmBotanist.NewRuntimeGardenerResourceManager()
-		if err != nil {
-			return nil, fmt.Errorf("failed creating runtime gardener resource manager: %w", err)
-		}
-	} else {
+	if !gardenadmBotanist.Shoot.RunsControlPlane() {
 		gardenadmBotanist.Components.Bastion = gardenadmBotanist.DefaultBastion()
 
 		// For `gardenadm bootstrap`, we don't initialize the control plane machines with a "full OSC".
@@ -201,9 +193,13 @@ func NewGardenadmBotanistWithoutResources(log logr.Logger) (*GardenadmBotanist, 
 }
 
 func newOperation(log logr.Logger, gardenClient client.Client, clientSet kubernetes.Interface) *operation.Operation {
+	gardenletConfig := &gardenletconfigv1alpha1.GardenletConfiguration{}
+	gardenletconfigv1alpha1.SetObjectDefaults_GardenletConfiguration(gardenletConfig)
+
 	return &operation.Operation{
 		Logger:         log,
 		Clock:          clock.RealClock{},
+		Config:         gardenletConfig,
 		GardenClient:   gardenClient,
 		SeedClientSet:  clientSet,
 		ShootClientSet: clientSet,
@@ -221,22 +217,22 @@ func newBotanist(
 	*botanistpkg.Botanist,
 	error,
 ) {
+	keysAndValues := []any{"cloudProfile", resources.CloudProfile, "project", resources.Project, "shoot", resources.Shoot}
+	if clientSet == nil {
+		clientSet = newFakeSeedClientSet(resources.Shoot.Spec.Kubernetes.Version)
+		log.Info("Initializing gardenadm botanist with fake client set", keysAndValues...) //nolint:logcheck
+	} else {
+		log.Info("Initializing gardenadm botanist with control plane client set", keysAndValues...) //nolint:logcheck
+	}
+
 	gardenObj, err := newGardenObject(ctx, resources.Project)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating garden object: %w", err)
 	}
 
-	shootObj, err := newShootObject(ctx, gardenClient, resources, runsControlPlane)
+	shootObj, err := newShootObject(ctx, gardenClient, clientSet, resources, runsControlPlane)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating shoot object: %w", err)
-	}
-
-	keysAndValues := []any{"cloudProfile", resources.CloudProfile, "project", resources.Project, "shoot", resources.Shoot}
-	if clientSet == nil {
-		clientSet = newFakeSeedClientSet(shootObj.KubernetesVersion.String())
-		log.Info("Initializing gardenadm botanist with fake client set", keysAndValues...) //nolint:logcheck
-	} else {
-		log.Info("Initializing gardenadm botanist with control plane client set", keysAndValues...) //nolint:logcheck
 	}
 
 	o := newOperation(log, gardenClient, clientSet)
@@ -302,6 +298,7 @@ func newGardenObject(ctx context.Context, project *gardencorev1beta1.Project) (*
 func newShootObject(
 	ctx context.Context,
 	gardenClient client.Client,
+	seedClientSet kubernetes.Interface,
 	resources gardenadm.Resources,
 	runsControlPlane bool,
 ) (
@@ -314,7 +311,7 @@ func newShootObject(
 		WithCloudProfileObject(resources.CloudProfile).
 		WithShootObject(resources.Shoot).
 		WithShootCredentialsFrom(gardenClient).
-		Build(ctx, gardenClient)
+		Build(ctx, seedClientSet, gardenClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed building shoot object: %w", err)
 	}

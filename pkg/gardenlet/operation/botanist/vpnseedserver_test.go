@@ -53,7 +53,7 @@ var _ = Describe("VPNSeedServer", func() {
 			kubernetesClient.EXPECT().Version()
 
 			botanist.SeedClientSet = kubernetesClient
-			botanist.Shoot = &shootpkg.Shoot{}
+			botanist.Shoot = &shootpkg.Shoot{RuntimeKubernetesVersion: semver.MustParse("1.31.1")}
 			botanist.Shoot.SetInfo(&gardencorev1beta1.Shoot{
 				Spec: gardencorev1beta1.ShootSpec{
 					Networking: &gardencorev1beta1.Networking{
@@ -61,9 +61,7 @@ var _ = Describe("VPNSeedServer", func() {
 					},
 				},
 			})
-			botanist.Seed = &seed.Seed{
-				KubernetesVersion: semver.MustParse("1.31.1"),
-			}
+			botanist.Seed = &seed.Seed{}
 			botanist.Seed.SetInfo(&gardencorev1beta1.Seed{})
 			botanist.Config = &gardenletconfigv1alpha1.GardenletConfiguration{
 				SNI: &gardenletconfigv1alpha1.SNI{

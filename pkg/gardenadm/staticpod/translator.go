@@ -90,6 +90,9 @@ func translatePodTemplate(ctx context.Context, c client.Client, objectMeta metav
 
 func translateSpec(spec *corev1.PodSpec) {
 	spec.HostNetwork = true
+	if spec.DNSPolicy == corev1.DNSClusterFirst {
+		spec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
+	}
 	spec.PriorityClassName = "system-node-critical"
 
 	hostNames := kubernetesutils.DNSNamesForService("kubernetes", metav1.NamespaceDefault)

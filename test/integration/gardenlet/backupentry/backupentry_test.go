@@ -274,7 +274,7 @@ var _ = Describe("BackupEntry controller tests", func() {
 				Shoot: runtime.RawExtension{
 					Object: shoot,
 				},
-				Seed: runtime.RawExtension{
+				Seed: &runtime.RawExtension{
 					Object: seed,
 				},
 				CloudProfile: runtime.RawExtension{

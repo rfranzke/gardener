@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -ex
 
 # IMAGE is set from skaffold, and looks like "registry.local.gardener.cloud:5001/europe-docker_pkg_dev_gardener-project_releases_gardener_extensions_provider-local:v1.95.0-dev-2f85d6a4e-dirty"
 # IMG looks the same and comes from requires.alias in the skaffold Config.
@@ -34,7 +34,7 @@ helm package "$chart_dir" -d "$chart_dir" --version "$tag"
 
 if echo $registry | grep -q -F "registry.local.gardener.cloud:5001"; then
     push_http="--plain-http"
-fi 
+fi
 
 deadline=$(( $(date +%s) + 30 ))
 attempt=0

@@ -28,7 +28,6 @@ import (
 	kubernetesmock "github.com/gardener/gardener/pkg/client/kubernetes/mock"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	. "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
-	seedpkg "github.com/gardener/gardener/pkg/gardenlet/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 	fakesecretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager/fake"
@@ -68,8 +67,7 @@ var _ = Describe("MachineControllerManager", func() {
 		botanist = &Botanist{Operation: &operation.Operation{}}
 		botanist.SeedClientSet = kubernetesClient
 		botanist.SecretsManager = fakeSecretsManager
-		botanist.Seed = &seedpkg.Seed{KubernetesVersion: semver.MustParse("1.31.0")}
-		botanist.Shoot = &shootpkg.Shoot{ControlPlaneNamespace: namespace}
+		botanist.Shoot = &shootpkg.Shoot{ControlPlaneNamespace: namespace, RuntimeKubernetesVersion: semver.MustParse("1.31.0")}
 		botanist.Shoot.SetInfo(shoot)
 
 		DeferCleanup(func() {

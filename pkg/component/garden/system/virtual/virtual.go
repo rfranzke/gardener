@@ -341,6 +341,7 @@ func (g *gardenSystem) computeResourcesData() (map[string][]byte, error) {
 					Resources: []string{
 						"cloudprofiles",
 						"exposureclasses",
+						"controllerregistrations",
 						"seeds",
 					},
 					Verbs: []string{"get", "list", "watch"},

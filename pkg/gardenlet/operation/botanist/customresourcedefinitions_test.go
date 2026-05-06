@@ -24,7 +24,6 @@ import (
 	fakekubernetes "github.com/gardener/gardener/pkg/client/kubernetes/fake"
 	. "github.com/gardener/gardener/pkg/gardenadm/botanist"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
-	botanistpkg "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
 	"github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 )
 
@@ -47,7 +46,7 @@ var _ = Describe("CustomResourceDefinitions", func() {
 		applier := kubernetes.NewApplier(fakeClient, mapper)
 
 		b = &GardenadmBotanist{
-			Botanist: &botanistpkg.Botanist{
+			Botanist: &Botanist{
 				Operation: &operation.Operation{
 					SeedClientSet: fakekubernetes.
 						NewClientSetBuilder().

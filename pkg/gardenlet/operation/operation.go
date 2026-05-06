@@ -11,7 +11,6 @@ import (
 	"maps"
 	"regexp"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -191,7 +190,7 @@ func (b *Builder) WithShootFromCluster(seedClientSet kubernetes.Interface, shoot
 			WithInternalDomain(gardenObj.InternalDomain).
 			WithDefaultDomains(gardenObj.DefaultDomains).
 			WithServiceAccountIssuerHostname(serviceAccountIssuerConfig).
-			Build(ctx, c)
+			Build(ctx, seedClientSet, c)
 		if err != nil {
 			return nil, err
 		}
@@ -265,12 +264,9 @@ func (b *Builder) Build(
 			return nil, err
 		}
 		operation.Seed = seed
-
-		seedVersion, err := semver.NewVersion(seedClientSet.Version())
-		if err != nil {
-			return nil, err
-		}
-		operation.Seed.KubernetesVersion = seedVersion
+	} else {
+		// See https://github.com/gardener/gardener/pull/14352
+		operation.Config.ETCDConfig.FeatureGates = map[string]bool{"UpgradeEtcdVersion": true}
 	}
 
 	garden, err := b.gardenFunc(ctx, internalDomain, defaultDomains)
@@ -308,6 +304,12 @@ func (b *Builder) Build(
 		return nil, err
 	}
 	operation.Logger = logger
+
+	if v1beta1helper.IsShootSelfHosted(shootObj.Spec.Provider.Workers) {
+		if err := operation.InitializeShootClients(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize self-hosted shoot client: %w", err)
+		}
+	}
 
 	return operation, nil
 }
@@ -464,7 +466,7 @@ func (o *Operation) IsShootMonitoringEnabled() bool {
 
 // WantsObservabilityComponents returns true if shoot is not of purpose testing and either shoot monitoring or vali is enabled.
 func (o *Operation) WantsObservabilityComponents() bool {
-	return o.Shoot.Purpose != gardencorev1beta1.ShootPurposeTesting && (helper.IsMonitoringEnabled(o.Config) || helper.IsValiEnabled(o.Config))
+	return o.Shoot.Purpose != gardencorev1beta1.ShootPurposeTesting && (helper.IsMonitoringEnabled(o.Config) || helper.IsValiEnabled(o.Config)) && !o.Shoot.IsSelfHosted()
 }
 
 // ComputeKubeAPIServerHost computes the host with a TLS certificate from a trusted origin for KubeAPIServer.
@@ -543,4 +545,14 @@ func (o *Operation) GetSeed() *gardencorev1beta1.Seed {
 		return nil
 	}
 	return o.Seed.GetInfo()
+}
+
+// GetValidVolumeSize is to get a valid volume size.
+// If the given size is smaller than the minimum volume size permitted by cloud provider on which seed cluster is
+// running, it will return the minimum size.
+func (o *Operation) GetValidVolumeSize(size string) string {
+	if o.Seed != nil {
+		return o.GetValidVolumeSize(size)
+	}
+	return size
 }

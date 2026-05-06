@@ -10,10 +10,9 @@ import (
 	"errors"
 	"fmt"
 
-	"use-logr/helper"
-
 	"github.com/go-logr/logr"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"use-logr/helper"
 )
 
 // notLogr has methods named like in logr.Logger but does not implement the interface.
