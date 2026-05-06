@@ -85,7 +85,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, fmt.Errorf("error retrieving object from store: %w", err)
 	}
 
-	if responsibleSeedName := gardenerutils.GetResponsibleSeedName(shoot.Spec.SeedName, shoot.Status.SeedName); responsibleSeedName != r.Config.SeedConfig.Name {
+	if responsibleSeedName := gardenerutils.GetResponsibleSeedName(shoot.Spec.SeedName, shoot.Status.SeedName); !v1beta1helper.IsShootSelfHosted(shoot.Spec.Provider.Workers) && responsibleSeedName != r.Config.SeedConfig.Name {
 		log.Info("Skipping because Shoot is not managed by this gardenlet", "seedName", responsibleSeedName)
 		return reconcile.Result{}, nil
 	}
@@ -133,11 +133,11 @@ func (r *Reconciler) reconcileShoot(ctx context.Context, log logr.Logger, shoot 
 	}
 
 	r.Recorder.Eventf(shoot, nil, corev1.EventTypeNormal, gardencorev1beta1.EventReconciled, gardencorev1beta1.EventActionReconcile, "%s Shoot cluster", utils.IifString(isRestoring, "Restored", "Reconciled"))
-	if err := r.patchShootStatusOperationSuccess(ctx, shoot, &o.Seed.GetInfo().Name, operationType); err != nil {
+	if err := r.patchShootStatusOperationSuccess(ctx, shoot, operationType); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if syncErr := r.syncClusterResourceToSeed(ctx, shoot, o.Garden.Project, o.Shoot.CloudProfile, o.Seed.GetInfo()); syncErr != nil {
+	if syncErr := r.syncClusterResourceToSeed(ctx, shoot, o.Garden.Project, o.Shoot.CloudProfile, o.GetSeed()); syncErr != nil {
 		log.Error(syncErr, "Cluster resource sync to seed failed")
 
 		// As the reconciliation flow has generally succeeded, the RetryCycleStartTime is already set to nil.
@@ -155,7 +155,7 @@ func (r *Reconciler) reconcileShoot(ctx context.Context, log logr.Logger, shoot 
 	reportMetrics(shoot, operationType, r.Clock.Now().UTC().Sub(shoot.CreationTimestamp.UTC()))
 
 	// determine when the next shoot reconciliation is supposed to happen
-	result = helper.CalculateControllerInfos(o.Seed.GetInfo(), shoot, r.Clock, *r.Config.Controllers.Shoot).RequeueAfter
+	result = helper.CalculateControllerInfos(o.GetSeed(), shoot, r.Clock, *r.Config.Controllers.Shoot).RequeueAfter
 	nextReconciliation := r.Clock.Now().UTC().Add(result.RequeueAfter)
 
 	log.Info("Shoot operation finished successfully, scheduling next reconciliation for Shoot", "requeueAfter", result.RequeueAfter, "nextReconciliation", nextReconciliation)
@@ -280,17 +280,20 @@ func (r *Reconciler) prepareOperation(ctx context.Context, log logr.Logger, shoo
 		return nil, reconcile.Result{}, err
 	}
 
-	seed := &gardencorev1beta1.Seed{}
-	// always fetch the seed that this gardenlet is responsible for (instead of using spec.seedName),
-	// it is never acting on a foreign seed (e.g., during control plane migration)
-	if err := r.GardenClient.Get(ctx, client.ObjectKey{Name: r.Config.SeedConfig.Name}, seed); err != nil {
-		return nil, reconcile.Result{}, err
+	var seed *gardencorev1beta1.Seed
+	if !v1beta1helper.IsShootSelfHosted(shoot.Spec.Provider.Workers) {
+		seed = &gardencorev1beta1.Seed{ObjectMeta: metav1.ObjectMeta{Name: r.Config.SeedConfig.Name}}
+		// always fetch the seed that this gardenlet is responsible for (instead of using spec.seedName),
+		// it is never acting on a foreign seed (e.g., during control plane migration)
+		if err := r.GardenClient.Get(ctx, client.ObjectKeyFromObject(seed), seed); err != nil {
+			return nil, reconcile.Result{}, err
+		}
 	}
 
 	var exposureClass *gardencorev1beta1.ExposureClass
 	if shoot.Spec.ExposureClassName != nil {
-		exposureClass = &gardencorev1beta1.ExposureClass{}
-		if err := r.GardenClient.Get(ctx, client.ObjectKey{Name: *shoot.Spec.ExposureClassName}, exposureClass); err != nil {
+		exposureClass = &gardencorev1beta1.ExposureClass{ObjectMeta: metav1.ObjectMeta{Name: *shoot.Spec.ExposureClassName}}
+		if err := r.GardenClient.Get(ctx, client.ObjectKeyFromObject(exposureClass), exposureClass); err != nil {
 			return nil, reconcile.Result{}, err
 		}
 	}
@@ -371,35 +374,47 @@ func (r *Reconciler) initializeOperation(
 	*operation.Operation,
 	error,
 ) {
-	gardenSecrets, err := gardenerutils.ReadGardenSecrets(
-		ctx,
-		log,
-		r.GardenClient,
-		gardenerutils.ComputeGardenNamespace(seed.Name),
+	var (
+		gardenSecrets  map[string]*corev1.Secret
+		internalDomain *gardenerutils.Domain
+		defaultDomains []*gardenerutils.Domain
+		err            error
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	internalDomain, err := gardenerutils.ReadGardenInternalDomain(
-		ctx,
-		r.GardenClient,
-		gardenerutils.ComputeGardenNamespace(seed.Name),
-		true,
-		seed.Spec.DNS.Internal,
-	)
-	if err != nil {
-		return nil, err
-	}
+	if !v1beta1helper.IsShootSelfHosted(shoot.Spec.Provider.Workers) {
+		// TODO(rfranzke): Enable shoot gardenlet to read the gardener.cloud/role=shoot-service-account-issuer secret from
+		//  garden namespace (adapt authorizer) --> requires virtual garden to be at least 1.34 (this promotes the selector
+		// 	feature gate to GA, hence, we can enforce the needed label selectors)
+		gardenSecrets, err = gardenerutils.ReadGardenSecrets(
+			ctx,
+			log,
+			r.GardenClient,
+			gardenerutils.ComputeGardenNamespace(seed.Name),
+		)
+		if err != nil {
+			return nil, err
+		}
 
-	defaultDomains, err := gardenerutils.ReadGardenDefaultDomains(
-		ctx,
-		r.GardenClient,
-		gardenerutils.ComputeGardenNamespace(seed.Name),
-		seed.Spec.DNS.Defaults,
-	)
-	if err != nil {
-		return nil, err
+		internalDomain, err = gardenerutils.ReadGardenInternalDomain(
+			ctx,
+			r.GardenClient,
+			gardenerutils.ComputeGardenNamespace(seed.Name),
+			true,
+			seed.Spec.DNS.Internal,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		defaultDomains, err = gardenerutils.ReadGardenDefaultDomains(
+			ctx,
+			r.GardenClient,
+			gardenerutils.ComputeGardenNamespace(seed.Name),
+			seed.Spec.DNS.Defaults,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	gardenObj, err := garden.
@@ -412,6 +427,10 @@ func (r *Reconciler) initializeOperation(
 		return nil, err
 	}
 
+	if seed == nil {
+		seed = &gardencorev1beta1.Seed{}
+	}
+
 	seedObj, err := seedpkg.
 		NewBuilder().
 		WithSeedObject(seed).
@@ -422,12 +441,12 @@ func (r *Reconciler) initializeOperation(
 
 	shootObj, err := shootpkg.
 		NewBuilder().
-		WithShootObject(shoot).
+		WithProjectName(project.Name).
 		WithCloudProfileObject(cloudProfile).
+		WithShootObject(shoot).
 		WithShootCredentialsFrom(r.GardenClient).
 		WithSeedObject(seed).
 		WithExposureClassObject(exposureClass).
-		WithProjectName(project.Name).
 		WithInternalDomain(gardenObj.InternalDomain).
 		WithDefaultDomains(gardenObj.DefaultDomains).
 		WithServiceAccountIssuerHostname(gardenSecrets[v1beta1constants.GardenRoleShootServiceAccountIssuer]).
@@ -469,10 +488,17 @@ func (r *Reconciler) initializeOperation(
 
 func (r *Reconciler) syncClusterResourceToSeed(ctx context.Context, shoot *gardencorev1beta1.Shoot, project *gardencorev1beta1.Project, cloudProfile *gardencorev1beta1.CloudProfile, seed *gardencorev1beta1.Seed) error {
 	clusterName := gardenerutils.ComputeTechnicalID(project.Name, shoot)
+	if v1beta1helper.IsShootSelfHosted(shoot.Spec.Provider.Workers) {
+		clusterName = metav1.NamespaceSystem
+	}
 	return gardenerextensions.SyncClusterResourceToSeed(ctx, r.SeedClientSet.Client(), clusterName, shoot, cloudProfile, seed)
 }
 
 func (r *Reconciler) checkSeed(ctx context.Context, seed *gardencorev1beta1.Seed, shoot *gardencorev1beta1.Shoot, operationType gardencorev1beta1.LastOperationType) error {
+	if seed == nil {
+		return nil
+	}
+
 	// Don't wait for the Seed to be ready if it is already marked for deletion. In this case
 	// it will never get ready because the bootstrap loop is never executed again.
 	// Don't block the Shoot deletion flow in this case to allow proper cleanup.
@@ -532,7 +558,7 @@ func (r *Reconciler) finalizeShootMigration(ctx context.Context, shoot *gardenco
 	}
 
 	r.Recorder.Eventf(shoot, nil, corev1.EventTypeNormal, gardencorev1beta1.EventMigrationPrepared, gardencorev1beta1.EventActionMigrate, "Prepared Shoot cluster for migration")
-	return reconcile.Result{}, r.patchShootStatusOperationSuccess(ctx, shoot, nil, gardencorev1beta1.LastOperationTypeMigrate)
+	return reconcile.Result{}, r.patchShootStatusOperationSuccess(ctx, shoot, gardencorev1beta1.LastOperationTypeMigrate)
 }
 
 func (r *Reconciler) finalizeShootDeletion(ctx context.Context, log logr.Logger, shoot *gardencorev1beta1.Shoot) (reconcile.Result, error) {
@@ -558,7 +584,7 @@ func (r *Reconciler) deleteClusterResourceFromSeed(ctx context.Context, shoot *g
 func (r *Reconciler) removeFinalizerFromShoot(ctx context.Context, log logr.Logger, shoot *gardencorev1beta1.Shoot) error {
 	operationType := gardencorev1beta1.LastOperationTypeDelete
 
-	if err := r.patchShootStatusOperationSuccess(ctx, shoot, nil, operationType); err != nil {
+	if err := r.patchShootStatusOperationSuccess(ctx, shoot, operationType); err != nil {
 		return err
 	}
 
@@ -839,7 +865,6 @@ func (r *Reconciler) updateShootStatusOperationStart(
 func (r *Reconciler) patchShootStatusOperationSuccess(
 	ctx context.Context,
 	shoot *gardencorev1beta1.Shoot,
-	seedName *string,
 	operationType gardencorev1beta1.LastOperationType,
 ) error {
 	var (
@@ -868,13 +893,11 @@ func (r *Reconciler) patchShootStatusOperationSuccess(
 
 	patch := client.StrategicMergeFrom(shoot.DeepCopy())
 
-	if seedName != nil {
-		isHibernated, err := r.isHibernationActive(ctx, shoot.Status.TechnicalID, seedName)
-		if err != nil {
-			return fmt.Errorf("error updating Shoot (%s/%s) after successful reconciliation when checking for active hibernation: %w", shoot.Namespace, shoot.Name, err)
-		}
-		shoot.Status.IsHibernated = isHibernated
+	isHibernated, err := r.isHibernationActive(ctx, v1beta1helper.ControlPlaneNamespaceForShoot(shoot))
+	if err != nil {
+		return fmt.Errorf("error updating Shoot (%s/%s) after successful reconciliation when checking for active hibernation: %w", shoot.Namespace, shoot.Name, err)
 	}
+	shoot.Status.IsHibernated = isHibernated
 
 	if setConditionsToProgressing {
 		for i, cond := range shoot.Status.Conditions {
@@ -1118,11 +1141,7 @@ func (r *Reconciler) shootHasBastions(ctx context.Context, shoot *gardencorev1be
 // isHibernationActive uses the Cluster resource in the Seed to determine whether the Shoot is hibernated
 // The Cluster contains the actual or "active" spec of the Shoot resource for this reconciliation
 // as the Shoot resources field `spec.hibernation.enabled` might have changed during the reconciliation
-func (r *Reconciler) isHibernationActive(ctx context.Context, clusterName string, seedName *string) (bool, error) {
-	if seedName == nil {
-		return false, nil
-	}
-
+func (r *Reconciler) isHibernationActive(ctx context.Context, clusterName string) (bool, error) {
 	cluster, err := gardenerextensions.GetCluster(ctx, r.SeedClientSet.Client(), clusterName)
 	if err != nil {
 		return false, err

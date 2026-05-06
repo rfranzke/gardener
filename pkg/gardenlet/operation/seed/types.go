@@ -24,5 +24,6 @@ type Seed struct {
 	info      atomic.Value
 	infoMutex sync.Mutex
 
+	// TODO: drop this, seems to be unused
 	KubernetesVersion *semver.Version
 }

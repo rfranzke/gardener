@@ -536,3 +536,11 @@ func (o *Operation) DeleteSecret(key string) {
 
 	delete(o.secrets, key)
 }
+
+// GetSeed returns the seed object if it is set.
+func (o *Operation) GetSeed() *gardencorev1beta1.Seed {
+	if o.Seed == nil {
+		return nil
+	}
+	return o.Seed.GetInfo()
+}

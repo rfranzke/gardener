@@ -192,6 +192,9 @@ func (a *RequestAuthorizer) Check(fromType graph.VertexType, attrs auth.Attribut
 			}
 		} else if len(req.listWatchSelector.labels) > 0 || len(req.listWatchSelector.fields) > 0 {
 			// TODO(rfranzke): Remove this else-if branch once the lowest supported Kubernetes version is 1.34.
+			//  Consider dropping the Secret replication in `gardener-controller-manager`'s `seed/secrets` controller
+			//  into the seed namespaces. Rather allow the seed gardenlets to list/watch the relevant secrets in the
+			//  garden name with proper label selectors.
 			return auth.DecisionAllow, "", nil
 		}
 	}

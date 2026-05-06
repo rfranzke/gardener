@@ -36,7 +36,6 @@ import (
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
 	gardenpkg "github.com/gardener/gardener/pkg/gardenlet/operation/garden"
-	seedpkg "github.com/gardener/gardener/pkg/gardenlet/operation/seed"
 	shootpkg "github.com/gardener/gardener/pkg/gardenlet/operation/shoot"
 	"github.com/gardener/gardener/pkg/nodeagent"
 	"github.com/gardener/gardener/pkg/nodeagent/dbus"
@@ -232,14 +231,9 @@ func newBotanist(
 		return nil, fmt.Errorf("failed creating shoot object: %w", err)
 	}
 
-	seedObj, err := newSeedObject(ctx, resources.Seed, shootObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed creating seed object: %w", err)
-	}
-
 	keysAndValues := []any{"cloudProfile", resources.CloudProfile, "project", resources.Project, "shoot", resources.Shoot}
 	if clientSet == nil {
-		clientSet = newFakeSeedClientSet(seedObj.KubernetesVersion.String())
+		clientSet = newFakeSeedClientSet(shootObj.KubernetesVersion.String())
 		log.Info("Initializing gardenadm botanist with fake client set", keysAndValues...) //nolint:logcheck
 	} else {
 		log.Info("Initializing gardenadm botanist with control plane client set", keysAndValues...) //nolint:logcheck
@@ -247,7 +241,6 @@ func newBotanist(
 
 	o := newOperation(log, gardenClient, clientSet)
 	o.Garden = gardenObj
-	o.Seed = seedObj
 	o.Shoot = shootObj
 
 	return botanistpkg.New(ctx, o)
@@ -306,19 +299,6 @@ func newGardenObject(ctx context.Context, project *gardencorev1beta1.Project) (*
 		Build(ctx)
 }
 
-func newSeedObject(ctx context.Context, seed *gardencorev1beta1.Seed, shootObj *shootpkg.Shoot) (*seedpkg.Seed, error) {
-	obj, err := seedpkg.
-		NewBuilder().
-		WithSeedObject(seed).
-		Build(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed building seed object: %w", err)
-	}
-
-	obj.KubernetesVersion = shootObj.KubernetesVersion
-	return obj, nil
-}
-
 func newShootObject(
 	ctx context.Context,
 	gardenClient client.Client,
@@ -328,26 +308,15 @@ func newShootObject(
 	*shootpkg.Shoot,
 	error,
 ) {
-	b := shootpkg.
+	obj, err := shootpkg.
 		NewBuilder().
 		WithProjectName(resources.Project.Name).
 		WithCloudProfileObject(resources.CloudProfile).
-		WithShootObject(resources.Shoot)
-
-	if resources.Shoot.Spec.SecretBindingName != nil || resources.Shoot.Spec.CredentialsBindingName != nil {
-		b = b.WithShootCredentialsFrom(gardenClient)
-	} else {
-		b = b.WithoutShootCredentials()
-	}
-
-	obj, err := b.Build(ctx, gardenClient)
+		WithShootObject(resources.Shoot).
+		WithShootCredentialsFrom(gardenClient).
+		Build(ctx, gardenClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed building shoot object: %w", err)
-	}
-
-	obj.Networks, err = shootpkg.ToNetworks(resources.Shoot, obj.IsWorkerless)
-	if err != nil {
-		return nil, fmt.Errorf("failed computing shoot networks: %w", err)
 	}
 
 	// In self-hosted shoot clusters, kube-system is used as the control plane namespace.
