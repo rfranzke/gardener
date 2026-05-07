@@ -18,12 +18,12 @@ import (
 	"github.com/gardener/gardener/pkg/utils/flow"
 )
 
-// ReconcileCustomResourceDefinitions reconciles the custom resource definitions.
-func (b *Botanist) ReconcileCustomResourceDefinitions(g *flow.Graph) flow.TaskIDs {
-	if !b.Shoot.IsSelfHosted() {
-		return nil
-	}
+const (
+	GroupReconcileCRDs flow.TaskID = "GroupReconcileCRDs"
+)
 
+// ReconcileCustomResourceDefinitions reconciles the custom resource definitions.
+func (b *Botanist) ReconcileCustomResourceDefinitions() flow.TaskGroup {
 	deployers := map[string]func() (component.DeployWaiter, error){
 		"VPA": func() (component.DeployWaiter, error) {
 			return vpa.NewCRD(b.SeedClientSet.Client(), nil)
@@ -48,10 +48,10 @@ func (b *Botanist) ReconcileCustomResourceDefinitions(g *flow.Graph) flow.TaskID
 		}
 	}
 
-	taskIDs := make(flow.TaskIDs, len(deployers))
+	tasks := make([]flow.Task, 0, len(deployers))
 
 	for description, newDeployer := range deployers {
-		taskIDs.Insert(g.Add(flow.Task{
+		tasks = append(tasks, flow.Task{
 			Name: fmt.Sprintf("Deploying %s CRDs", description),
 			Fn: func(ctx context.Context) error {
 				d, err := newDeployer()
@@ -61,8 +61,8 @@ func (b *Botanist) ReconcileCustomResourceDefinitions(g *flow.Graph) flow.TaskID
 
 				return component.OpWait(d).Deploy(ctx)
 			},
-		}))
+		})
 	}
 
-	return taskIDs
+	return flow.NewTaskGroup(GroupReconcileCRDs, tasks...)
 }

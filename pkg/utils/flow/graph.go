@@ -19,6 +19,10 @@ type Task struct {
 	Dependencies TaskIDs
 }
 
+func (t *Task) ID() TaskID {
+	return TaskID(t.Name)
+}
+
 // Spec returns the TaskSpec of a task.
 func (t *Task) Spec() *TaskSpec {
 	return &TaskSpec{
@@ -39,10 +43,38 @@ type TaskSpec struct {
 // Tasks is a mapping from TaskID to TaskSpec.
 type Tasks map[TaskID]*TaskSpec
 
+type TaskGroup struct {
+	ID           TaskID
+	Tasks        []Task
+
+	// Dependencies on other tasks or groups.
+	Dependencies TaskIDs
+}
+
+func (g TaskGroup) TaskIDs() []TaskID {
+	taskIDs := make(TaskIDs, len(g.Tasks))
+	for _, task := range g.Tasks {
+		taskIDs.Insert(task.ID())
+	}
+	return taskIDs.TaskIDs()
+}
+
+func NewTaskGroup(id TaskID, tasks ...Task) TaskGroup {
+	return TaskGroup{ID: id, Tasks: tasks}
+}
+
+func (g TaskGroup) WithDependencies(dependencies ...TaskIDer) TaskGroup {
+	for _, dependency := range dependencies {
+		g.Dependencies.Insert(dependency)
+	}
+	return g
+}
+
 // Graph is a builder for a Flow.
 type Graph struct {
-	name  string
-	tasks Tasks
+	name   string
+	tasks  Tasks
+	groups map[TaskID]TaskGroup
 
 	// Clock is used to retrieve the current time.
 	Clock clock.Clock
@@ -63,7 +95,7 @@ func NewGraph(name string) *Graph {
 // - There is already a Task present with the same name
 // - One of the dependencies of the Task is not present
 func (g *Graph) Add(task Task) TaskID {
-	id := TaskID(task.Name)
+	id := task.ID()
 	if _, ok := g.tasks[id]; ok {
 		panic(fmt.Sprintf("Task with id %q already exists", id))
 	}
@@ -76,6 +108,27 @@ func (g *Graph) Add(task Task) TaskID {
 	}
 	g.tasks[id] = task.Spec()
 	return id
+}
+
+func (g *Graph) AddGroup(group TaskGroup) TaskIDs {
+	g.groups[group.ID] = group
+
+	dependencies := make(TaskIDs)
+	for dependency := range group.Dependencies {
+		if gg, isGroup := g.groups[dependency]; isGroup {
+			dependencies.Insert(gg)
+		} else {
+			dependencies.Insert(dependency)
+		}
+	}
+
+	ids := make(TaskIDs, len(g.tasks))
+	for _, task := range group.Tasks {
+		task.Dependencies.Insert(dependencies)
+		ids.Insert(g.Add(task))
+	}
+
+	return ids
 }
 
 // Compile compiles the graph into an executable Flow.

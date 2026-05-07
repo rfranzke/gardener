@@ -11,4 +11,8 @@ import (
 // Botanist is a struct which has methods that perform cloud-independent operations for a Shoot cluster.
 type Botanist struct {
 	*operation.Operation
+
+	Flow Flow
 }
+
+type Flow struct {}

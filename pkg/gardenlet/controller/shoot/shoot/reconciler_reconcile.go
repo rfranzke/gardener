@@ -216,23 +216,9 @@ func (r *Reconciler) setupReconcileSelfHostedShootFlow(ctx context.Context, b *b
 	}
 
 	var (
-		deployControlPlaneNamespace = g.Add(flow.Task{
-			Name: "Deploying control plane namespace",
-			Fn:   b.DeployControlPlaneNamespace,
-		})
-		deployGardenNamespace = g.Add(flow.Task{
-			Name: "Deploying garden namespace",
-			Fn: func(ctx context.Context) error {
-				return gardenerutils.ReconcileGardenNamespace(ctx, b.SeedClientSet.Client(), v1beta1constants.GardenNamespace, v1beta1helper.ControlPlaneWorkerPoolForShoot(b.Shoot.GetInfo().Spec.Provider.Workers).Zones, true, nil)
-			},
-		})
-		deployCloudProviderSecret = g.Add(flow.Task{
-			Name:         "Deploying cloud provider account secret",
-			Fn:           b.DeployCloudProviderSecret,
-			SkipIf:       b.Shoot.Credentials == nil,
-			Dependencies: flow.NewTaskIDs(deployControlPlaneNamespace),
-		})
-		reconcileCustomResourceDefinitions = b.ReconcileCustomResourceDefinitions(g)
+		deployNamespaces                   = g.AddGroup(b.DeployNamespaces())
+		deployCloudProviderSecret          = g.AddGroup(b.DeployCloudProviderCredentials())
+		reconcileCustomResourceDefinitions = g.AddGroup(b.ReconcileCustomResourceDefinitions())
 		reconcileClusterResource           = g.Add(flow.Task{
 			Name: "Reconciling extensions.gardener.cloud/v1alpha1.Cluster resource",
 			Fn: func(ctx context.Context) error {
@@ -260,7 +246,7 @@ func (r *Reconciler) setupReconcileSelfHostedShootFlow(ctx context.Context, b *b
 					b.Shoot.Components.ControlPlane.ResourceManager.Deploy,
 				)(ctx)
 			},
-			Dependencies: flow.NewTaskIDs(deployGardenNamespace, initializeSecretsManagement),
+			Dependencies: flow.NewTaskIDs(deployNamespaces, initializeSecretsManagement),
 		})
 		waitUntilGardenerResourceManagerReady = g.Add(flow.Task{
 			Name: "Waiting until gardener-resource-manager reports readiness",

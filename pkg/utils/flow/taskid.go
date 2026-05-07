@@ -40,6 +40,16 @@ func NewTaskIDs(ids ...TaskIDer) TaskIDs {
 	return set
 }
 
+// NewStringTaskIDs returns a new set of TaskIDs initialized
+// to contain all TaskIDs of the given strings.
+func NewStringTaskIDs(ids ...string) TaskIDs {
+	set := make(TaskIDs)
+	for _, id := range ids {
+		set.Insert(TaskID(id))
+	}
+	return set
+}
+
 // Insert inserts the TaskIDs of all TaskIDers into
 // this TaskIDs.
 func (t TaskIDs) Insert(iders ...TaskIDer) TaskIDs {
