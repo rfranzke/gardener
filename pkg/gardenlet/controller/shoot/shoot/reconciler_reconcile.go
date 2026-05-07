@@ -21,10 +21,8 @@ import (
 	resourcesv1alpha1 "github.com/gardener/gardener/pkg/apis/resources/v1alpha1"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap/keys"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
-	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
 	"github.com/gardener/gardener/pkg/component/shared"
 	"github.com/gardener/gardener/pkg/controllerutils"
-	gardenerextensions "github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/gardenlet/controller/shoot/shoot/helper"
 	"github.com/gardener/gardener/pkg/gardenlet/operation"
 	botanistpkg "github.com/gardener/gardener/pkg/gardenlet/operation/botanist"
@@ -216,64 +214,17 @@ func (r *Reconciler) setupReconcileSelfHostedShootFlow(ctx context.Context, b *b
 	}
 
 	var (
-		deployNamespaces                   = g.AddGroup(b.DeployNamespaces())
-		deployCloudProviderSecret          = g.AddGroup(b.DeployCloudProviderCredentials())
-		reconcileCustomResourceDefinitions = g.AddGroup(b.ReconcileCustomResourceDefinitions())
-		reconcileClusterResource           = g.Add(flow.Task{
-			Name: "Reconciling extensions.gardener.cloud/v1alpha1.Cluster resource",
-			Fn: func(ctx context.Context) error {
-				return gardenerextensions.SyncClusterResourceToSeed(ctx, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.Shoot.GetInfo(), b.Shoot.CloudProfile, b.GetSeed())
-			},
-			Dependencies: flow.NewTaskIDs(reconcileCustomResourceDefinitions),
-		})
-		initializeSecretsManagement = g.Add(flow.Task{
-			Name:         "Initializing secrets management",
-			Fn:           b.InitializeSecretsManagement,
-			Dependencies: flow.NewTaskIDs(reconcileClusterResource),
-		})
-		deployGardenerResourceManager = g.Add(flow.Task{
-			Name: "Deploying gardener-resource-manager",
-			Fn: func(ctx context.Context) error {
-				b.Shoot.Components.ControlPlane.RuntimeResourceManager.SetBootstrapControlPlaneNode(false)
-				b.Shoot.Components.ControlPlane.ResourceManager.SetBootstrapControlPlaneNode(false)
+		_                           = g.AddGroup(b.DeployNamespaces())
+		deployCloudProviderSecret   = g.AddGroup(b.DeployCloudProviderCredentials())
+		_                           = g.AddGroup(b.ReconcileCustomResourceDefinitions())
+		_                           = g.AddGroup(b.ReconcileClusterResource())
+		initializeSecretsManagement = g.AddGroup(b.InitializeSecretsManager())
 
-				if shootIsGarden {
-					return b.Shoot.Components.ControlPlane.ResourceManager.Deploy(ctx)
-				}
+		waitUntilGardenerResourceManagerReady = g.AddGroup(
+			b.InitializeResourceManager(true, shootIsGarden),
+		)
+		// end of harmonized flow
 
-				return flow.Parallel(
-					b.Shoot.Components.ControlPlane.RuntimeResourceManager.Deploy,
-					b.Shoot.Components.ControlPlane.ResourceManager.Deploy,
-				)(ctx)
-			},
-			Dependencies: flow.NewTaskIDs(deployNamespaces, initializeSecretsManagement),
-		})
-		waitUntilGardenerResourceManagerReady = g.Add(flow.Task{
-			Name: "Waiting until gardener-resource-manager reports readiness",
-			Fn: func(ctx context.Context) error {
-				if shootIsGarden {
-					return b.Shoot.Components.ControlPlane.ResourceManager.Wait(ctx)
-				}
-
-				return flow.Parallel(
-					b.Shoot.Components.ControlPlane.RuntimeResourceManager.Wait,
-					b.Shoot.Components.ControlPlane.ResourceManager.Wait,
-				)(ctx)
-			},
-			Dependencies: flow.NewTaskIDs(deployGardenerResourceManager),
-		})
-		_ = g.Add(flow.Task{
-			Name: "Deploying seed system resources",
-			Fn: func(ctx context.Context) error {
-				return seedsystem.New(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, seedsystem.Values{}).Deploy(ctx)
-			},
-			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
-		})
-		_ = g.Add(flow.Task{
-			Name:         "Deploying shoot system resources",
-			Fn:           b.DeployShootSystem,
-			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
-		})
 		deployInfrastructure = g.Add(flow.Task{
 			Name:         "Deploying Shoot infrastructure",
 			Fn:           b.DeployInfrastructure,

@@ -24,8 +24,6 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/component"
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig/nodeinit"
-	seedsystem "github.com/gardener/gardener/pkg/component/seed/system"
-	gardenerextensions "github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/gardenadm/botanist"
 	"github.com/gardener/gardener/pkg/gardenadm/cmd"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -97,43 +95,23 @@ func run(ctx context.Context, opts *Options) error {
 	var (
 		g = flow.NewGraph("bootstrap")
 
-		deployNamespaces                   = g.AddGroup(b.DeployNamespaces())
-		_                                  = g.AddGroup(b.DeployCloudProviderCredentials())
-		reconcileCustomResourceDefinitions = g.AddGroup(b.ReconcileCustomResourceDefinitions())
-		reconcileClusterResource           = g.Add(flow.Task{
-			Name: "Reconciling extensions.gardener.cloud/v1alpha1.Cluster resource",
-			Fn: func(ctx context.Context) error {
-				return gardenerextensions.SyncClusterResourceToSeed(ctx, b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, b.Shoot.GetInfo(), b.Shoot.CloudProfile, b.Seed.GetInfo())
-			},
-			Dependencies: flow.NewTaskIDs(reconcileCustomResourceDefinitions),
-		})
-		initializeSecretsManagement = g.Add(flow.Task{
-			Name:         "Initializing internal state of Gardener secrets manager",
-			Fn:           b.InitializeSecretsManagement,
-			Dependencies: flow.NewTaskIDs(reconcileClusterResource),
-		})
+		_                         = g.AddGroup(b.DeployNamespaces())
+		deployCloudProviderSecret = g.AddGroup(b.DeployCloudProviderCredentials())
+		_                         = g.AddGroup(b.ReconcileCustomResourceDefinitions())
+		_                         = g.AddGroup(b.ReconcileClusterResource())
+		_                         = g.AddGroup(b.InitializeSecretsManager())
+
 		deployPriorityClassCritical = g.Add(flow.Task{
-			Name:         "Deploying PriorityClass for gardener-resource-manager",
-			Fn:           b.DeployPriorityClassCritical,
-			Dependencies: flow.NewTaskIDs(deployNamespaces, initializeSecretsManagement),
+			Name: "Deploying PriorityClass for gardener-resource-manager",
+			Fn:   b.DeployPriorityClassCritical,
 		})
-		deployGardenerResourceManager = g.Add(flow.Task{
-			Name:         "Deploying gardener-resource-manager",
-			Fn:           b.Shoot.Components.ControlPlane.ResourceManager.Deploy,
-			Dependencies: flow.NewTaskIDs(deployNamespaces, initializeSecretsManagement, deployPriorityClassCritical),
-		})
-		waitUntilGardenerResourceManagerReady = g.Add(flow.Task{
-			Name:         "Waiting until gardener-resource-manager reports readiness",
-			Fn:           b.Shoot.Components.ControlPlane.ResourceManager.Wait,
-			Dependencies: flow.NewTaskIDs(deployGardenerResourceManager),
-		})
-		_ = g.Add(flow.Task{
-			Name: "Deploying seed system resources",
-			Fn: func(ctx context.Context) error {
-				return seedsystem.New(b.SeedClientSet.Client(), b.Shoot.ControlPlaneNamespace, seedsystem.Values{}).Deploy(ctx)
-			},
-			Dependencies: flow.NewTaskIDs(waitUntilGardenerResourceManagerReady),
-		})
+
+		waitUntilGardenerResourceManagerReady = g.AddGroup(
+			b.InitializeResourceManager(true, false).
+				WithDependencies(deployPriorityClassCritical),
+		)
+		// end of harmonized flow
+
 		deployExtensionControllers = g.Add(flow.Task{
 			Name: "Deploying extension controllers",
 			Fn: func(ctx context.Context) error {
@@ -149,9 +127,10 @@ func run(ctx context.Context, opts *Options) error {
 		deployNetworkPolicies = g.Add(flow.Task{
 			Name:         "Deploying network policies",
 			Fn:           b.ApplyNetworkPolicies,
-			Dependencies: flow.NewTaskIDs(deployGardenerResourceManager, deployExtensionControllers),
+			Dependencies: flow.NewTaskIDs(deployExtensionControllers),
 		})
 		syncPointBootstrapped = flow.NewTaskIDs(
+			deployCloudProviderSecret,
 			deployNetworkPolicies,
 			waitUntilGardenerResourceManagerReady,
 			waitUntilExtensionControllersReady,

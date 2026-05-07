@@ -44,28 +44,48 @@ type TaskSpec struct {
 type Tasks map[TaskID]*TaskSpec
 
 type TaskGroup struct {
-	ID           TaskID
-	Tasks        []Task
+	id    TaskID
+	tasks map[TaskID]Task
 
-	// Dependencies on other tasks or groups.
-	Dependencies TaskIDs
+	// dependencies on other tasks or groups.
+	dependencies TaskIDs
 }
 
 func (g TaskGroup) TaskIDs() []TaskID {
-	taskIDs := make(TaskIDs, len(g.Tasks))
-	for _, task := range g.Tasks {
-		taskIDs.Insert(task.ID())
+	taskIDs := make(TaskIDs, len(g.tasks))
+	for id := range g.tasks {
+		taskIDs.Insert(id)
 	}
 	return taskIDs.TaskIDs()
 }
 
 func NewTaskGroup(id TaskID, tasks ...Task) TaskGroup {
-	return TaskGroup{ID: id, Tasks: tasks}
+	return (TaskGroup{
+		id:           id,
+		tasks:        make(map[TaskID]Task, len(tasks)),
+		dependencies: make(TaskIDs, len(tasks)),
+	}).AddAll(tasks...)
+}
+
+func (g TaskGroup) AddAll(tasks ...Task) TaskGroup {
+	for _, task := range tasks {
+		g.Add(task)
+	}
+	return g
+}
+
+func (g TaskGroup) Add(task Task) TaskID {
+	id := task.ID()
+	if _, ok := g.tasks[id]; ok {
+		panic(fmt.Sprintf("Task with id %q already exists in group %q", id, g.id))
+	}
+	g.tasks[id] = task
+	return id
 }
 
 func (g TaskGroup) WithDependencies(dependencies ...TaskIDer) TaskGroup {
 	for _, dependency := range dependencies {
-		g.Dependencies.Insert(dependency)
+		g.dependencies.Insert(dependency)
 	}
 	return g
 }
@@ -87,7 +107,7 @@ func (g *Graph) Name() string {
 
 // NewGraph returns a new Graph with the given name.
 func NewGraph(name string) *Graph {
-	return &Graph{name: name, tasks: make(Tasks), Clock: clock.RealClock{}}
+	return &Graph{name: name, tasks: make(Tasks), groups: make(map[TaskID]TaskGroup), Clock: clock.RealClock{}}
 }
 
 // Add adds the given Task to the graph.
@@ -111,10 +131,10 @@ func (g *Graph) Add(task Task) TaskID {
 }
 
 func (g *Graph) AddGroup(group TaskGroup) TaskIDs {
-	g.groups[group.ID] = group
+	g.groups[group.id] = group
 
 	dependencies := make(TaskIDs)
-	for dependency := range group.Dependencies {
+	for dependency := range group.dependencies {
 		if gg, isGroup := g.groups[dependency]; isGroup {
 			dependencies.Insert(gg)
 		} else {
@@ -123,7 +143,10 @@ func (g *Graph) AddGroup(group TaskGroup) TaskIDs {
 	}
 
 	ids := make(TaskIDs, len(g.tasks))
-	for _, task := range group.Tasks {
+	for _, task := range group.tasks {
+		if task.Dependencies == nil {
+			task.Dependencies = make(TaskIDs, len(dependencies))
+		}
 		task.Dependencies.Insert(dependencies)
 		ids.Insert(g.Add(task))
 	}
