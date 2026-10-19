@@ -101,6 +101,8 @@ replace github.com/gardener/gardener/pkg/apis => ./pkg/apis
 
 replace github.com/gardener/machine-controller-manager => github.com/rfranzke/machine-controller-manager v0.0.0-20261021074440-17dbf24f99db
 
+replace github.com/gardener/etcd-druid/api => github.com/captainirs/etcd-druid/api v0.0.0-20261016091230-3f77931c394f
+
 // TODO(marc1404): Drop this line once test fixtures have been updated to match the new serialization behavior past v4.0.0-rc.2
 replace go.yaml.in/yaml/v4 => go.yaml.in/yaml/v4 v4.0.0-rc.2
 

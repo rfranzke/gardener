@@ -73,8 +73,9 @@ images:
 
   - name: etcd-druid
     sourceRepository: github.com/gardener/etcd-druid
-    repository: europe-docker.pkg.dev/gardener-project/releases/gardener/etcd-druid
-    tag: "v0.39.0"
+    ref: captainirs/etcd-druid:grpc-lb
+    #repository: europe-docker.pkg.dev/gardener-project/releases/gardener/etcd-druid
+    #tag: "v0.39.0"
   - name: etcd
     sourceRepository: github.com/etcd-io/etcd
     repository: gcr.io/etcd-development/etcd
