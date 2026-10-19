@@ -23,7 +23,7 @@ require (
 	github.com/gardener/dependency-watchdog v1.8.0
 	github.com/gardener/etcd-druid/api v0.39.0
 	github.com/gardener/gardener/pkg/apis v1.149.0
-	github.com/gardener/machine-controller-manager v0.63.0
+	github.com/gardener/machine-controller-manager v0.63.1-0.20261014044326-53813047a982
 	github.com/gardener/pvc-autoscaler v0.3.1
 	github.com/gardener/terminal-controller-manager v0.39.0
 	github.com/go-jose/go-jose/v4 v4.1.5
@@ -98,6 +98,8 @@ require (
 )
 
 replace github.com/gardener/gardener/pkg/apis => ./pkg/apis
+
+replace github.com/gardener/machine-controller-manager => github.com/rfranzke/machine-controller-manager v0.0.0-20261021074440-17dbf24f99db
 
 // TODO(marc1404): Drop this line once test fixtures have been updated to match the new serialization behavior past v4.0.0-rc.2
 replace go.yaml.in/yaml/v4 => go.yaml.in/yaml/v4 v4.0.0-rc.2
