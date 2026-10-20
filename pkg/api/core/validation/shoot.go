@@ -3811,11 +3811,6 @@ func validateSelfHostedShootControlPlane(spec *core.ShootSpec, fldPath *field.Pa
 	controlPlaneWorkerIdx := slices.IndexFunc(spec.Provider.Workers, func(w core.Worker) bool { return w.ControlPlane != nil })
 	workerPath := fldPath.Child("provider", "workers").Index(controlPlaneWorkerIdx)
 
-	// TODO(scheererj): Remove restriction controlPlaneWorker.Minimum != 1 with support for high availability
-	if controlPlaneWorker.Minimum != controlPlaneWorker.Maximum || controlPlaneWorker.Minimum != 1 {
-		allErrs = append(allErrs, field.Invalid(workerPath.Child("minimum"), controlPlaneWorker.Minimum, "self-hosted shoots only support minimum=maximum=1 for the control plane worker pool (might change in the future)"))
-	}
-
 	if spec.ControlPlane == nil || spec.ControlPlane.HighAvailability == nil {
 		if controlPlaneWorker.Maximum != 1 {
 			allErrs = append(allErrs, field.Invalid(workerPath.Child("maximum"), controlPlaneWorker.Maximum, "control plane worker pool must have maximum=1 when high availability is not configured"))
@@ -3823,16 +3818,16 @@ func validateSelfHostedShootControlPlane(spec *core.ShootSpec, fldPath *field.Pa
 		return allErrs
 	}
 
-	if controlPlaneWorker.Maximum != 3 {
-		allErrs = append(allErrs, field.Invalid(workerPath.Child("maximum"), controlPlaneWorker.Maximum, "control plane worker pool must have maximum=3 when high availability is configured"))
+	if controlPlaneWorker.Minimum != 3 || controlPlaneWorker.Maximum != 3 {
+		allErrs = append(allErrs, field.Invalid(workerPath.Child("maximum"), controlPlaneWorker.Maximum, "control plane worker pool must have minimum=maximum=3 when high availability is configured"))
 	}
 
 	if controlPlaneWorker.MaxSurge == nil || controlPlaneWorker.MaxSurge.IntValue() != 1 {
 		allErrs = append(allErrs, field.Invalid(workerPath.Child("maxSurge"), controlPlaneWorker.MaxSurge, "control plane worker pool must have maxSurge=1 when high availability is configured"))
 	}
 
-	if controlPlaneWorker.MaxUnavailable == nil || controlPlaneWorker.MaxUnavailable.IntValue() != 1 {
-		allErrs = append(allErrs, field.Invalid(workerPath.Child("maxUnavailable"), controlPlaneWorker.MaxUnavailable, "control plane worker pool must have maxUnavailable=1 when high availability is configured"))
+	if controlPlaneWorker.MaxUnavailable == nil || controlPlaneWorker.MaxUnavailable.IntValue() != 0 {
+		allErrs = append(allErrs, field.Invalid(workerPath.Child("maxUnavailable"), controlPlaneWorker.MaxUnavailable, "control plane worker pool must have maxUnavailable=0 when high availability is configured"))
 	}
 
 	if spec.ControlPlane.HighAvailability.FailureTolerance.Type == core.FailureToleranceTypeZone && len(controlPlaneWorker.Zones) != 3 {
