@@ -10,6 +10,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -474,6 +475,16 @@ func (e *etcd) Deploy(ctx context.Context) error {
 		}
 
 		if e.values.StaticPodConfig != nil {
+			e.etcd.Spec.Backup.DynamicEndpoints = &druidcorev1alpha1.DynamicEndpointsSpec{
+				HostPathDir:       filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints),
+				EndpointsFileName: filepath.Base(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints),
+			}
+
+			if e.values.Role == v1beta1constants.ETCDRoleMain {
+				e.etcd.Spec.Backup.DynamicEndpoints.RefreshEnabled = new(true)
+				e.etcd.Spec.Backup.DynamicEndpoints.RefreshInterval = &metav1.Duration{Duration: 30 * time.Second}
+			}
+
 			var replicas int32
 			if existingEtcd != nil {
 				e.etcd.Spec.ExternallyManagedMemberAddresses = slices.Clone(existingEtcd.Spec.ExternallyManagedMemberAddresses)

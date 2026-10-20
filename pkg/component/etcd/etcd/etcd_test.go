@@ -378,6 +378,15 @@ var _ = Describe("Etcd", func() {
 				}
 				obj.Spec.Replicas = int32(len(obj.Spec.ExternallyManagedMemberAddresses))
 
+				obj.Spec.Backup.DynamicEndpoints = &druidcorev1alpha1.DynamicEndpointsSpec{
+					HostPathDir:       "/var/lib/etcd",
+					EndpointsFileName: "control-plane-nodes-endpoints",
+				}
+				if role != "events" {
+					obj.Spec.Backup.DynamicEndpoints.RefreshEnabled = new(true)
+					obj.Spec.Backup.DynamicEndpoints.RefreshInterval = &metav1.Duration{Duration: 30 * time.Second}
+				}
+
 				if role == "events" {
 					obj.Spec.Backup.Port = new(int32(8081))
 					obj.Spec.Etcd.ClientPort = new(int32(2382))
