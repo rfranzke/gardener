@@ -39,6 +39,7 @@ import (
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
 	gardenerutils "github.com/gardener/gardener/pkg/utils/gardener"
+	imagevectorutils "github.com/gardener/gardener/pkg/utils/imagevector"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
@@ -128,8 +129,10 @@ func (b *Botanist) staticControlPlaneComponents(useBootstrapEtcd, useShootAccess
 			//  is resolved, as the volume, volume mounts, and env vars can then be specified directly via the Etcd CR
 			//  API (should be done directly in the ETCD component in pkg/component/etcd/etcd).
 			const (
-				serverTLSVolumeName = etcdconstants.VolumeNameServerTLS
-				peerTLSVolumeName   = etcdconstants.VolumeNamePeerTLS
+				serverTLSVolumeName         = etcdconstants.VolumeNameServerTLS
+				peerTLSVolumeName           = etcdconstants.VolumeNamePeerTLS
+				machineAddressVolumeName    = "machine-address"
+				envConfigEmptyDirVolumeName = "env-config"
 			)
 
 			genericTokenKubeconfigSecret, _ := b.SecretsManager.Get(v1beta1constants.SecretNameGenericTokenKubeconfig)
@@ -138,15 +141,34 @@ func (b *Botanist) staticControlPlaneComponents(useBootstrapEtcd, useShootAccess
 			utilruntime.Must(kubernetesutils.VisitPodSpec(pod, func(podSpec *corev1.PodSpec) {
 				kubernetesutils.AddVolume(podSpec, corev1.Volume{Name: serverTLSVolumeName, VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: staticpod.HostPath(pod.Name, etcdconstants.VolumeNameServerTLS)}}}, true)
 				kubernetesutils.AddVolume(podSpec, corev1.Volume{Name: peerTLSVolumeName, VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: staticpod.HostPath(pod.Name, etcdconstants.VolumeNamePeerTLS)}}}, true)
+				kubernetesutils.AddVolume(podSpec, corev1.Volume{Name: machineAddressVolumeName, VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathMachineAddress)}}}, true)
+				kubernetesutils.AddVolume(podSpec, corev1.Volume{Name: envConfigEmptyDirVolumeName, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}, true)
 
 				kubernetesutils.VisitContainers(podSpec, func(container *corev1.Container) {
 					kubernetesutils.AddVolumeMount(container, corev1.VolumeMount{Name: serverTLSVolumeName, MountPath: "/var/etcd/ssl/server", ReadOnly: true}, true)
 					kubernetesutils.AddVolumeMount(container, corev1.VolumeMount{Name: peerTLSVolumeName, MountPath: "/var/etcd/ssl/peer/server", ReadOnly: true}, true)
 				}, etcdconstants.ContainerNameEtcd)
 
+				imageAlpine, _ := imagevector.Containers().FindImage(imagevector.ContainerImageNameAlpineIptables, imagevectorutils.RuntimeVersion(b.ShootVersion()), imagevectorutils.TargetVersion(b.ShootVersion()))
+				kubernetesutils.AddInitContainer(podSpec, corev1.Container{
+					Name:    "env-mess",
+					Image:   imageAlpine.String(),
+					Command: []string{"sh", "-c", `echo "POD_IP=$(cat ` + v1beta1constants.OperatingSystemConfigFilePathMachineAddress + `)" > /config/config.env`},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: envConfigEmptyDirVolumeName, MountPath: "/config"},
+						{Name: machineAddressVolumeName, MountPath: filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathMachineAddress)},
+					},
+				}, false)
+
 				kubernetesutils.VisitContainers(podSpec, func(container *corev1.Container) {
 					kubernetesutils.AddVolumeMount(container, corev1.VolumeMount{Name: serverTLSVolumeName, MountPath: "/var/etcdbr/ssl/server", ReadOnly: true}, true)
 					kubernetesutils.AddEnvVar(container, corev1.EnvVar{Name: "KUBECONFIG", Value: gardenerutils.PathGenericKubeconfig}, true)
+					kubernetesutils.AddEnvVar(container, corev1.EnvVar{Name: "POD_IP", ValueFrom: &corev1.EnvVarSource{FileKeyRef: &corev1.FileKeySelector{
+						VolumeName: machineAddressVolumeName,
+						Path:       "config.env",
+						Key:        "POD_IP",
+						Optional:   new(false),
+					}}}, true)
 				}, etcdconstants.ContainerNameBackupRestore)
 			}))
 		}

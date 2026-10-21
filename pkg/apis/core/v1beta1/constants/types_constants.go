@@ -831,6 +831,9 @@ const (
 	// OperatingSystemConfigFilePathControlPlaneNodesEndpoints is a constant for a path to a file containing the
 	// endpoints of the control plane nodes in self-hosted shoot clusters.
 	OperatingSystemConfigFilePathControlPlaneNodesEndpoints = "/var/lib/etcd/control-plane-nodes-endpoints"
+	// OperatingSystemConfigFilePathMachineAddress is a constant for a path to a file containing the machine address of
+	// the control plane nodes in self-hosted shoot clusters.
+	OperatingSystemConfigFilePathMachineAddress = "/var/lib/etcd/machine-address"
 	// OperatingSystemConfigFilePathCAETCD is a constant for a path to a folder containing the ETCD CA.
 	OperatingSystemConfigFilePathCAETCD = "/var/lib/etcd/ca"
 	// OperatingSystemConfigFilePathCAETCDPeer is a constant for a path to a folder containing the ETCD peer CA.

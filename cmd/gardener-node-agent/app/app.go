@@ -225,6 +225,7 @@ func run(ctx context.Context, cancel context.CancelFunc, log logr.Logger, cfg *n
 			Log:        log.WithName("controlplane-nodes-endpoints"),
 			FS:         fs,
 			Client:     mgr.GetClient(),
+			HostName:   hostName,
 			PreferIPv6: ptr.Deref(cfg.Controllers.OperatingSystemConfig.PreferIPv6, false),
 		})
 	}
