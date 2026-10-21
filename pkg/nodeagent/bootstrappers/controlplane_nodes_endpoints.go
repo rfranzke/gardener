@@ -17,8 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
-	"github.com/gardener/gardener/pkg/utils"
-	"github.com/gardener/gardener/pkg/utils/flow"
 	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
@@ -29,23 +27,11 @@ type ControlPlaneNodesEndpoints struct {
 	Log        logr.Logger
 	FS         afero.Afero
 	Client     client.Client
-	HostName   string
 	PreferIPv6 bool
 }
 
 // Start writes the IP addresses of the control plane nodes to a file on the host if it does not exist yet.
 func (c *ControlPlaneNodesEndpoints) Start(ctx context.Context) error {
-	if err := c.FS.MkdirAll(filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints), 0755); err != nil {
-		return fmt.Errorf("failed creating directory %s: %w", filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints), err)
-	}
-
-	return flow.Parallel(
-		func(ctx context.Context) error { return c.writeEndpointsFile(ctx) },
-		func(_ context.Context) error { return c.writeMachineAddressFile() },
-	)(ctx)
-}
-
-func (c *ControlPlaneNodesEndpoints) writeEndpointsFile(ctx context.Context) error {
 	if _, err := c.FS.Stat(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed checking for existence of file %s: %w", v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints, err)
 	} else if err == nil {
@@ -64,7 +50,12 @@ func (c *ControlPlaneNodesEndpoints) writeEndpointsFile(ctx context.Context) err
 		if err != nil {
 			return fmt.Errorf("failed determining IP address of control plane node %q: %w", node.Name, err)
 		}
+
 		endpoints = append(endpoints, ip.String())
+	}
+
+	if err := c.FS.MkdirAll(filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints), 0755); err != nil {
+		return fmt.Errorf("failed creating directory %s: %w", filepath.Dir(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints), err)
 	}
 
 	c.Log.Info("Writing file containing IP addresses of control plane nodes",
@@ -72,24 +63,4 @@ func (c *ControlPlaneNodesEndpoints) writeEndpointsFile(ctx context.Context) err
 		"endpoints", endpoints,
 	)
 	return c.FS.WriteFile(v1beta1constants.OperatingSystemConfigFilePathControlPlaneNodesEndpoints, []byte(strings.Join(endpoints, "\n")), 0600)
-}
-
-func (c *ControlPlaneNodesEndpoints) writeMachineAddressFile() error {
-	if _, err := c.FS.Stat(v1beta1constants.OperatingSystemConfigFilePathMachineAddress); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed checking for existence of file %s: %w", v1beta1constants.OperatingSystemConfigFilePathMachineAddress, err)
-	} else if err == nil {
-		c.Log.Info("File containing machine address already exists, will not overwrite it", "file", v1beta1constants.OperatingSystemConfigFilePathMachineAddress)
-		return nil
-	}
-
-	machineIP, err := utils.MachineIP(c.HostName, c.PreferIPv6)
-	if err != nil {
-		return fmt.Errorf("failed fetching machine IP: %w", err)
-	}
-
-	c.Log.Info("Writing file containing IP address of this control plane node",
-		"path", v1beta1constants.OperatingSystemConfigFilePathMachineAddress,
-		"machineIP", machineIP,
-	)
-	return c.FS.WriteFile(v1beta1constants.OperatingSystemConfigFilePathMachineAddress, machineIP, 0600)
 }

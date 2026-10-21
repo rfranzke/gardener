@@ -96,23 +96,6 @@ func VisitContainers(podSpec *corev1.PodSpec, visit func(*corev1.Container), con
 	}
 }
 
-// AddInitContainer adds the given InitContainer to the given PodSpec if not present. If a InitContainer with the given
-// name is already present it optionally overwrites the InitContainer according to the overwrite parameter.
-func AddInitContainer(podSpec *corev1.PodSpec, container corev1.Container, overwrite bool) {
-	for i, c := range podSpec.InitContainers {
-		if c.Name == container.Name {
-			// init container with given name is already present
-			if overwrite {
-				podSpec.InitContainers[i] = container
-			}
-			return
-		}
-	}
-
-	// init container with given name is not present, add it
-	podSpec.InitContainers = append(podSpec.InitContainers, container)
-}
-
 // AddVolume adds the given Volume to the given PodSpec if not present. If a Volume with the given name is already
 // present it optionally overwrites the Volume according to the overwrite parameter.
 func AddVolume(podSpec *corev1.PodSpec, volume corev1.Volume, overwrite bool) {
