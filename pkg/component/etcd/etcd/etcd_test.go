@@ -1397,7 +1397,7 @@ var _ = Describe("Etcd", func() {
 
 				It("should set ExternallyManagedMemberAddresses and derive Replicas from controlPlaneNodeIP", func() {
 					nodeIP := net.ParseIP("1.2.3.4")
-					etcd.SetStaticPodControlPlaneNodesIPAddresses(nodeIP)
+					etcd.SetStaticPodFirstControlPlaneMachineIP(nodeIP)
 
 					Expect(etcd.Deploy(ctx)).To(Succeed())
 
@@ -1409,7 +1409,7 @@ var _ = Describe("Etcd", func() {
 
 				It("should not duplicate an address when the same IP is deployed twice", func() {
 					nodeIP := net.ParseIP("1.2.3.4")
-					etcd.SetStaticPodControlPlaneNodesIPAddresses(nodeIP)
+					etcd.SetStaticPodFirstControlPlaneMachineIP(nodeIP)
 
 					Expect(etcd.Deploy(ctx)).To(Succeed())
 					Expect(etcd.Deploy(ctx)).To(Succeed())
@@ -1422,7 +1422,7 @@ var _ = Describe("Etcd", func() {
 
 				It("should preserve existing addresses and append a new IP on subsequent deploy", func() {
 					firstIP := net.ParseIP("1.2.3.4")
-					etcd.SetStaticPodControlPlaneNodesIPAddresses(firstIP)
+					etcd.SetStaticPodFirstControlPlaneMachineIP(firstIP)
 					Expect(etcd.Deploy(ctx)).To(Succeed())
 
 					etcd2 := New(log, c, testNamespace, sm, Values{
@@ -1438,7 +1438,7 @@ var _ = Describe("Etcd", func() {
 						StaticPodConfig:         &StaticPodConfig{},
 					})
 					secondIP := net.ParseIP("5.6.7.8")
-					etcd2.SetStaticPodControlPlaneNodesIPAddresses(secondIP)
+					etcd2.SetStaticPodFirstControlPlaneMachineIP(secondIP)
 					Expect(etcd2.Deploy(ctx)).To(Succeed())
 
 					etcdObj := &druidcorev1alpha1.Etcd{}
