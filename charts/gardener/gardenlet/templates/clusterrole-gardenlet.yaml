@@ -491,3 +491,16 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - storagemigration.k8s.io
+  resources:
+  - storageversionmigrations
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+  - deletecollection
