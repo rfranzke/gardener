@@ -269,14 +269,14 @@ var _ = Describe("Worker", func() {
 				},
 			}).Build()
 
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
-			Expect(workerPoolToCloudConfigSecretMeta).To(BeNil())
+			workerPoolToOSCSecretNameToChecksum, err := WorkerPoolToOperatingSystemConfigSecretNameToChecksum(ctx, c)
+			Expect(workerPoolToOSCSecretNameToChecksum).To(BeNil())
 			Expect(err).To(MatchError(fakeErr))
 		})
 
 		It("should return an empty map when there are no secrets", func() {
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
-			Expect(workerPoolToCloudConfigSecretMeta).To(BeEmpty())
+			workerPoolToOSCSecretNameToChecksum, err := WorkerPoolToOperatingSystemConfigSecretNameToChecksum(ctx, c)
+			Expect(workerPoolToOSCSecretNameToChecksum).To(BeEmpty())
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -334,9 +334,9 @@ var _ = Describe("Worker", func() {
 			Expect(c.Create(ctx, &secret3WithoutWorkerPoolLabel)).To(Succeed())
 			Expect(c.Create(ctx, &secret4WithoutAnnotations)).To(Succeed())
 
-			workerPoolToCloudConfigSecretMeta, err := WorkerPoolToOperatingSystemConfigSecretMetaMap(ctx, c)
+			workerPoolToOSCSecretNameToChecksum, err := WorkerPoolToOperatingSystemConfigSecretNameToChecksum(ctx, c)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(workerPoolToCloudConfigSecretMeta).To(Equal(map[string]metav1.ObjectMeta{
+			Expect(workerPoolToOSCSecretNameToChecksum).To(Equal(map[string]metav1.ObjectMeta{
 				pool1: {
 					Name:            "secret1",
 					Namespace:       metav1.NamespaceSystem,
@@ -361,8 +361,8 @@ var _ = Describe("Worker", func() {
 	})
 
 	DescribeTable("#OperatingSystemConfigUpdatedForAllWorkerPools",
-		func(workers []gardencorev1beta1.Worker, workerPoolToNodes map[string][]corev1.Node, workerPoolToCloudConfigSecretMeta map[string]metav1.ObjectMeta, matcher gomegatypes.GomegaMatcher) {
-			Expect(OperatingSystemConfigUpdatedForAllWorkerPools(workers, workerPoolToNodes, workerPoolToCloudConfigSecretMeta)).To(matcher)
+		func(workers []gardencorev1beta1.Worker, workerPoolToNodes map[string][]corev1.Node, workerPoolToOSCSecretNameToChecksum map[string]map[string]string, matcher gomegatypes.GomegaMatcher) {
+			Expect(OperatingSystemConfigUpdatedForAllWorkerPools(workers, workerPoolToNodes, workerPoolToOSCSecretNameToChecksum)).To(matcher)
 		},
 
 		Entry("secret meta missing",

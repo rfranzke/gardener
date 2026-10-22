@@ -242,7 +242,7 @@ func (b *Botanist) DeployManagedResourceForGardenerNodeAgent(ctx context.Context
 			return fmt.Errorf("did not find osc data for worker pool %q", worker.Name)
 		}
 
-		data, err := b.generateOperatingSystemConfigSecretForWorker(ctx, worker, oscData.Original)
+		data, err := b.generateOperatingSystemConfigSecretForWorker(ctx, worker, append([]operatingsystemconfig.Data{oscData.Original}, oscData.OldOriginals...))
 		if err != nil {
 			return err
 		}
@@ -347,21 +347,25 @@ func (b *Botanist) mergeExistingSecretRefsIntoNodeAgentManagedResource(ctx conte
 func (b *Botanist) generateOperatingSystemConfigSecretForWorker(
 	ctx context.Context,
 	worker gardencorev1beta1.Worker,
-	oscDataOriginal operatingsystemconfig.Data,
+	oscOriginalData []operatingsystemconfig.Data,
 ) (
 	map[string][]byte,
 	error,
 ) {
-	oscSecret, err := NodeAgentOSCSecretFn(ctx, b.SeedClientSet.Client(), oscDataOriginal.Object, oscDataOriginal.GardenerNodeAgentSecretName, worker.Name, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed computing the OperatingSystemConfig secret for gardener-node-agent for pool %q: %w", worker.Name, err)
+	var oscSecrets []client.Object
+	for _, oscData := range oscOriginalData {
+		oscSecret, err := NodeAgentOSCSecretFn(ctx, b.SeedClientSet.Client(), oscData.Object, oscData.GardenerNodeAgentSecretName, worker.Name, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed computing the OperatingSystemConfig secret for gardener-node-agent for pool %q: %w", worker.Name, err)
+		}
+		oscSecrets = append(oscSecrets, oscSecret)
 	}
 
 	resources, err := managedresources.
 		NewRegistry(kubernetes.ShootScheme, kubernetes.ShootCodec, kubernetes.ShootSerializer).
-		AddAllAndSerialize(oscSecret)
+		AddAllAndSerialize(oscSecrets...)
 	if err != nil {
-		return nil, fmt.Errorf("failed adding gardener-node-agent secret for pool %q to the registry and serializing it: %w", worker.Name, err)
+		return nil, fmt.Errorf("failed adding gardener-node-agent secrets for pool %q to the registry and serializing them: %w", worker.Name, err)
 	}
 
 	return resources, nil

@@ -35,6 +35,7 @@ import (
 	"github.com/gardener/gardener/pkg/component/extensions/operatingsystemconfig"
 	"github.com/gardener/gardener/pkg/component/kubernetes/adminaccess"
 	kubeapiserver "github.com/gardener/gardener/pkg/component/kubernetes/apiserver"
+	"github.com/gardener/gardener/pkg/extensions"
 	"github.com/gardener/gardener/pkg/gardenadm/staticpod"
 	"github.com/gardener/gardener/pkg/utils"
 	"github.com/gardener/gardener/pkg/utils/flow"
@@ -323,7 +324,59 @@ func (b *Botanist) DeployOperatingSystemConfigWithStaticPods(ctx context.Context
 		}
 	}
 
+	if err := b.reconcileStaticPodFilesInOldOperatingSystemConfigs(ctx, oscData.OldOriginals, files); err != nil {
+		return nil, "", fmt.Errorf("failed reconciling static pod files in old OperatingSystemConfigs: %w", err)
+	}
+
 	return &oscData.Original, controlPlaneWorkerPool.Name, nil
+}
+
+func (b *Botanist) reconcileStaticPodFilesInOldOperatingSystemConfigs(ctx context.Context, oldOSCData []operatingsystemconfig.Data, files []extensionsv1alpha1.File) error {
+	for _, oscData := range oldOSCData {
+		osc := oscData.Object
+
+		patch := client.MergeFrom(osc.DeepCopy())
+		mergeFilesIntoOSC(osc, files)
+		metav1.SetMetaDataAnnotation(&osc.ObjectMeta, v1beta1constants.GardenerOperation, v1beta1constants.GardenerOperationReconcile)
+		metav1.SetMetaDataAnnotation(&osc.ObjectMeta, v1beta1constants.GardenerTimestamp, time.Now().UTC().Format(time.RFC3339Nano))
+		if err := b.SeedClientSet.Client().Patch(ctx, osc, patch); err != nil {
+			return fmt.Errorf("failed patching OperatingSystemConfig %s with additional files for static control plane pods: %w", client.ObjectKeyFromObject(osc), err)
+		}
+
+		if err := extensions.WaitUntilExtensionObjectReady(ctx,
+			b.SeedClientSet.Client(),
+			b.Logger,
+			osc,
+			extensionsv1alpha1.OperatingSystemConfigResource,
+			operatingsystemconfig.DefaultInterval,
+			operatingsystemconfig.DefaultSevereThreshold,
+			operatingsystemconfig.DefaultTimeout,
+			nil,
+		); err != nil {
+			return fmt.Errorf("failed waiting for OperatingSystemConfig %s to be ready: %w", client.ObjectKeyFromObject(osc), err)
+		}
+	}
+
+	return nil
+}
+
+// mergeFilesIntoOSC updates files in osc.Spec.Files that share a path with entries in files, and appends new ones.
+// Files under /etc/kubernetes/manifests/*.yaml are skipped — their content is managed by the static pod translator
+// and must not be overwritten by subsequent reconciliation passes.
+func mergeFilesIntoOSC(osc *extensionsv1alpha1.OperatingSystemConfig, files []extensionsv1alpha1.File) {
+	for _, file := range files {
+		if idx := slices.IndexFunc(osc.Spec.Files, func(f extensionsv1alpha1.File) bool { return f.Path == file.Path }); idx >= 0 {
+			// if strings.HasSuffix(file.Path, ".yaml") && strings.HasPrefix(file.Path, kubeletcomponent.FilePathKubernetesManifests) {
+			// 	// TODO: decode corresponding file in OSC and <file> to corev1.Pod
+			// 	//  update hash annotation in osc.Spec.Files to trigger restart (e.g., in case referenced secrets have changed)
+			// 	//  encode again
+			// }
+
+			osc.Spec.Files[idx] = file
+		} else {
+			osc.Spec.Files = append(osc.Spec.Files, file)
+		}
+	}
 }
 
 func (b *Botanist) appendStaticAdminKubeconfigToFiles(files []extensionsv1alpha1.File) ([]extensionsv1alpha1.File, error) {
