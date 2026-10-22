@@ -168,7 +168,16 @@ func (k *kubeAPIServer) reconcileDeployment(
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameCAETCD)
 	}
 
-	secretETCDClient, found := k.secretsManager.Get(etcd.SecretNameClient)
+	var etcdClientSecretGetOptions []secretsmanager.GetOption
+	if k.values.RunsAsStaticPod {
+		// During the Preparing phase of CA rotation for self-hosted shoots, we don't run the secretsmanager.Generate
+		// function for the etcd-client secret because we first have to roll out the etcd-peer CA to all peers. However,
+		// kube-apiserver requires the etcd-client secret, so we load it directly from the cluster.
+		// TODO(rfranzke): Consider adding this option only during the Preparing phase for CA rotation.
+		etcdClientSecretGetOptions = append(etcdClientSecretGetOptions, secretsmanager.LoadMissingSecretFromCluster(ctx))
+	}
+
+	secretETCDClient, found := k.secretsManager.Get(etcd.SecretNameClient, etcdClientSecretGetOptions...)
 	if !found {
 		return fmt.Errorf("secret %q not found", etcd.SecretNameClient)
 	}
