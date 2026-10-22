@@ -1008,7 +1008,7 @@ func (e *etcd) Scale(ctx context.Context, replicas int32) error {
 }
 
 func (e *etcd) RolloutPeerCA(ctx context.Context) error {
-	if !e.values.HighAvailabilityEnabled {
+	if !e.values.HighAvailabilityEnabled && e.values.StaticPodConfig == nil {
 		return nil
 	}
 
