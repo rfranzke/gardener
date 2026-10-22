@@ -832,7 +832,7 @@ func (r *resourceManager) ensureDeployment(ctx context.Context, configMap *corev
 			CertType:                    secrets.ServerCert,
 			SkipPublishingCACertificate: true,
 		},
-		secretsmanager.SignedByCA(r.values.SecretNameServerCA, secretsmanager.UseCurrentCA),
+		secretsmanager.SignedByCA(r.values.SecretNameServerCA), // , secretsmanager.UseCurrentCA), check https://github.com/gardener/gardener/pull/5785 if this is really still needed
 		secretsmanager.Rotate(secretsmanager.InPlace),
 		secretsmanager.Namespace(r.namespace),
 	)
