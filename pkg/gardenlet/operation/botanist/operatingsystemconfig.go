@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -247,14 +248,15 @@ func (b *Botanist) DeployManagedResourceForGardenerNodeAgent(ctx context.Context
 			return err
 		}
 
-		managedResourceSecretNameToData["shoot-gardener-node-agent-"+worker.Name] = data
+		managedResourceSecretNameToData[managedResourceSecretName(worker.Name)] = data
 	}
 
 	rbacResourcesData, err := NodeAgentRBACResourcesDataFn()
 	if err != nil {
 		return err
 	}
-	managedResourceSecretNameToData["shoot-gardener-node-agent-rbac"] = rbacResourcesData
+	// TODO: If a worker pool is called "rbac", we will have fun here (x-ref L251)
+	managedResourceSecretNameToData[managedResourceSecretName("rbac")] = rbacResourcesData
 
 	// Create Secrets for the ManagedResource containing the configs for all worker pools well as the RBAC resources.
 	for secretName, data := range managedResourceSecretNameToData {
@@ -284,7 +286,7 @@ func (b *Botanist) DeployManagedResourceForGardenerNodeAgent(ctx context.Context
 	// from the ManagedResource's `.spec.secretRefs[]` - otherwise, they would be deleted.
 	// To prevent this, we check if the ManagedResource already exists, and if so, we collect all existing references
 	if forControlPlanePoolOnly {
-		if err := b.mergeExistingSecretRefsIntoNodeAgentManagedResource(ctx, managedResource, managedResourceSecretNamesWanted); err != nil {
+		if err := b.mergeExistingSecretRefsIntoNodeAgentManagedResource(ctx, managedResource, managedResourceSecretNamesWanted, workerPools); err != nil {
 			return fmt.Errorf("failed to merge existing ManagedResource secret references into the gardener-node-agent ManagedResource: %w", err)
 		}
 	}
@@ -312,6 +314,10 @@ func (b *Botanist) DeployManagedResourceForGardenerNodeAgent(ctx context.Context
 	})
 }
 
+func managedResourceSecretName(suffix string) string {
+	return "shoot-gardener-node-agent-" + suffix
+}
+
 func (b *Botanist) relevantWorkerPools(controlPlanePoolOnly bool) ([]gardencorev1beta1.Worker, error) {
 	workerPools := b.Shoot.GetInfo().Spec.Provider.Workers
 	if !controlPlanePoolOnly {
@@ -325,7 +331,12 @@ func (b *Botanist) relevantWorkerPools(controlPlanePoolOnly bool) ([]gardencorev
 	return []gardencorev1beta1.Worker{*controlPlanePool}, nil
 }
 
-func (b *Botanist) mergeExistingSecretRefsIntoNodeAgentManagedResource(ctx context.Context, managedResource *builder.ManagedResource, managedResourceSecretNamesWanted sets.Set[string]) error {
+func (b *Botanist) mergeExistingSecretRefsIntoNodeAgentManagedResource(
+	ctx context.Context,
+	managedResource *builder.ManagedResource,
+	managedResourceSecretNamesWanted sets.Set[string],
+	workerPools []gardencorev1beta1.Worker,
+) error {
 	existingManagedResource := &resourcesv1alpha1.ManagedResource{ObjectMeta: metav1.ObjectMeta{Name: GardenerNodeAgentManagedResourceName, Namespace: b.Shoot.ControlPlaneNamespace}}
 	if err := b.SeedClientSet.Client().Get(ctx, client.ObjectKeyFromObject(existingManagedResource), existingManagedResource); err != nil {
 		if !apierrors.IsNotFound(err) {
@@ -334,7 +345,15 @@ func (b *Botanist) mergeExistingSecretRefsIntoNodeAgentManagedResource(ctx conte
 		return nil
 	}
 
+loop:
 	for _, secretRef := range existingManagedResource.Spec.SecretRefs {
+		// Ignore old SecretRef for the given worker pools.
+		for _, pool := range workerPools {
+			if strings.HasPrefix(secretRef.Name, managedresources.SecretPrefix+managedResourceSecretName(pool.Name)) {
+				continue loop
+			}
+		}
+
 		if managedResourceSecretName := secretRef.Name; !managedResourceSecretNamesWanted.Has(secretRef.Name) {
 			managedResource.WithSecretRef(managedResourceSecretName)
 			managedResourceSecretNamesWanted.Insert(managedResourceSecretName)
