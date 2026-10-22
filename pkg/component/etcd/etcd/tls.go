@@ -52,7 +52,7 @@ func GenerateClientCertificate(ctx context.Context, secretsManager secretsmanage
 			CertType:                    secretsutils.ClientCert,
 			SkipPublishingCACertificate: true,
 		},
-		secretsmanager.SignedByCA(v1beta1constants.SecretNameCAETCD),
+		secretsmanager.SignedByCA(v1beta1constants.SecretNameCAETCD, secretsmanager.UseOldCA),
 		secretsmanager.Rotate(secretsmanager.InPlace),
 	)
 }
