@@ -148,6 +148,8 @@ type etcd struct {
 	secretsManager secretsmanager.Interface
 	values         Values
 	etcd           *druidcorev1alpha1.Etcd
+
+	peerCARolledOut bool
 }
 
 // Values are the configuration values for the ETCD.
@@ -1048,6 +1050,10 @@ func (e *etcd) RolloutPeerCA(ctx context.Context) error {
 }
 
 func (e *etcd) IsPeerCARolledOut(ctx context.Context) (bool, error) {
+	if e.peerCARolledOut {
+		return true, nil
+	}
+
 	if err := e.client.Get(ctx, client.ObjectKeyFromObject(e.etcd), e.etcd); err != nil {
 		if !apierrors.IsNotFound(err) {
 			return false, err
@@ -1063,7 +1069,12 @@ func (e *etcd) MarkAsPeerCARolloutCompleted(ctx context.Context) error {
 
 	patch := client.MergeFrom(e.etcd.DeepCopy())
 	metav1.SetMetaDataAnnotation(&e.etcd.ObjectMeta, secretsrotation.AnnotationKeyPeerCARolledOut, "true")
-	return e.client.Patch(ctx, e.etcd, patch)
+	if err := e.client.Patch(ctx, e.etcd, patch); err != nil {
+		return err
+	}
+
+	e.peerCARolledOut = true
+	return nil
 }
 
 func (e *etcd) UnmarkAsPeerCARolloutCompleted(ctx context.Context) error {
@@ -1077,7 +1088,12 @@ func (e *etcd) UnmarkAsPeerCARolloutCompleted(ctx context.Context) error {
 
 	patch := client.MergeFrom(e.etcd.DeepCopy())
 	delete(e.etcd.Annotations, secretsrotation.AnnotationKeyPeerCARolledOut)
-	return e.client.Patch(ctx, e.etcd, patch)
+	if err := e.client.Patch(ctx, e.etcd, patch); err != nil {
+		return err
+	}
+
+	e.peerCARolledOut = false
+	return nil
 }
 
 func (e *etcd) GetValues() Values { return e.values }
