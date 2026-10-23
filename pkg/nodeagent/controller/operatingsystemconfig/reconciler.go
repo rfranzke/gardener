@@ -191,7 +191,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, serialReconciliationLease.release(ctx)
 	}
 
-	if serialReconciliation(secret) {
+	if serialReconciliation(secret) && r.LeaseClient != nil {
 		log.Info("OperatingSystemConfig reconciliation is serial")
 
 		if err := serialReconciliationLease.reload(ctx); err != nil {
