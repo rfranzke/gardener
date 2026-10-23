@@ -438,36 +438,40 @@ func (b *Botanist) appendEtcdCAsToFiles(ctx context.Context, files []extensionsv
 		}
 	}
 
-	if secret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCAETCD, secretsmanager.Current); found {
-		files = append(files, filesForCA(secret.Data, filepath.Join(v1beta1constants.OperatingSystemConfigFilePathCAETCD, v1beta1constants.OperatingSystemConfigFolderCurrent))...)
-	}
-	if secret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCAETCD, secretsmanager.Old); found {
-		files = append(files, filesForCA(secret.Data, filepath.Join(v1beta1constants.OperatingSystemConfigFilePathCAETCD, v1beta1constants.OperatingSystemConfigFolderOld))...)
+	maskOldCAsAsCurrent, err := b.mustMaskOldEtcdCAsAsCurrent(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed checking whether old ETCD CAs must be marked as 'current': %w", err)
 	}
 
-	if maskOldPeerCAAsCurrent, err := b.mustMaskOldPeerCAAsCurrent(ctx); err != nil {
-		return nil, fmt.Errorf("failed checking whether old ETCD peer CA must be marked as 'current': %w", err)
-	} else if !maskOldPeerCAAsCurrent {
-		if secret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCAETCDPeer, secretsmanager.Current); found {
-			files = append(files, filesForCA(secret.Data, filepath.Join(v1beta1constants.OperatingSystemConfigFilePathCAETCDPeer, v1beta1constants.OperatingSystemConfigFolderCurrent))...)
+	for _, ca := range []struct {
+		name     string
+		basePath string
+	}{
+		{name: v1beta1constants.SecretNameCAETCD, basePath: v1beta1constants.OperatingSystemConfigFilePathCAETCD},
+		{name: v1beta1constants.SecretNameCAETCDPeer, basePath: v1beta1constants.OperatingSystemConfigFilePathCAETCDPeer},
+	} {
+		if !maskOldCAsAsCurrent {
+			if secret, found := b.SecretsManager.Get(ca.name, secretsmanager.Current); found {
+				files = append(files, filesForCA(secret.Data, filepath.Join(ca.basePath, v1beta1constants.OperatingSystemConfigFolderCurrent))...)
+			}
+			if secret, found := b.SecretsManager.Get(ca.name, secretsmanager.Old); found {
+				files = append(files, filesForCA(secret.Data, filepath.Join(ca.basePath, v1beta1constants.OperatingSystemConfigFolderOld))...)
+			}
+		} else {
+			var data map[string][]byte
+			if secret, found := b.SecretsManager.Get(ca.name, secretsmanager.Old); found {
+				data = secret.Data
+			} else if secret, found = b.SecretsManager.Get(ca.name, secretsmanager.Current); found {
+				data = secret.Data
+			}
+			files = append(files, filesForCA(data, filepath.Join(ca.basePath, v1beta1constants.OperatingSystemConfigFolderCurrent))...)
 		}
-		if secret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCAETCDPeer, secretsmanager.Old); found {
-			files = append(files, filesForCA(secret.Data, filepath.Join(v1beta1constants.OperatingSystemConfigFilePathCAETCDPeer, v1beta1constants.OperatingSystemConfigFolderOld))...)
-		}
-	} else {
-		var data map[string][]byte
-		if secret, found := b.SecretsManager.Get(v1beta1constants.SecretNameCAETCDPeer, secretsmanager.Old); found {
-			data = secret.Data
-		} else if secret, found = b.SecretsManager.Get(v1beta1constants.SecretNameCAETCDPeer, secretsmanager.Current); found {
-			data = secret.Data
-		}
-		files = append(files, filesForCA(data, filepath.Join(v1beta1constants.OperatingSystemConfigFilePathCAETCDPeer, v1beta1constants.OperatingSystemConfigFolderCurrent))...)
 	}
 
 	return files, nil
 }
 
-func (b *Botanist) mustMaskOldPeerCAAsCurrent(ctx context.Context) (bool, error) {
+func (b *Botanist) mustMaskOldEtcdCAsAsCurrent(ctx context.Context) (bool, error) {
 	// During the Preparing phase of certificate authority rotation, we are rolling out ETCD twice: First, to only
 	// populate the new peer CA (so that all peers know and trust it). Second, to regenerate new peer certificates
 	// (now that all peers know the new CA, we can issue new peer certificates for the members).
