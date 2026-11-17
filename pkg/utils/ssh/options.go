@@ -76,3 +76,16 @@ func WithProxyConnection(conn *Connection) Option {
 		return nil
 	}
 }
+
+// WithHostKey pins the expected host public key given in OpenSSH `authorized_keys` format. It overrides the default
+// trust-on-first-use host key callback, so the connection fails if the remote host presents a different key.
+func WithHostKey(publicKey []byte) Option {
+	return func(opts *Config) error {
+		key, _, _, _, err := ssh.ParseAuthorizedKey(publicKey)
+		if err != nil {
+			return err
+		}
+		opts.HostKeyCallback = ssh.FixedHostKey(key)
+		return nil
+	}
+}
