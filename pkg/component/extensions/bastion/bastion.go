@@ -21,6 +21,7 @@ import (
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/extensions"
+	"github.com/gardener/gardener/pkg/utils"
 	secretsutils "github.com/gardener/gardener/pkg/utils/secrets"
 	secretsmanager "github.com/gardener/gardener/pkg/utils/secrets/manager"
 	sshutils "github.com/gardener/gardener/pkg/utils/ssh"
@@ -41,8 +42,9 @@ type Bastion struct {
 	WaitTimeout         time.Duration
 	SSHDial             func(ctx context.Context, addr string, opts ...sshutils.Option) (*sshutils.Connection, error)
 
-	bastion          *extensionsv1alpha1.Bastion
-	sshKeypairSecret *corev1.Secret
+	bastion              *extensionsv1alpha1.Bastion
+	sshKeypairSecret     *corev1.Secret
+	sshHostKeypairSecret *corev1.Secret
 
 	// Connection is the SSH connection to the Bastion opened by Wait.
 	Connection *sshutils.Connection
@@ -101,6 +103,15 @@ func (b *Bastion) Deploy(ctx context.Context) error {
 		return fmt.Errorf("could not generate ssh keypair: %w", err)
 	}
 
+	b.sshHostKeypairSecret, err = b.secretsManager.Generate(ctx, &secretsutils.RSASecretConfig{
+		Name:       b.sshHostKeypairSecretName(),
+		Bits:       4096,
+		UsedForSSH: true,
+	})
+	if err != nil {
+		return fmt.Errorf("could not generate ssh host keypair: %w", err)
+	}
+
 	_, err = controllerutils.GetAndCreateOrMergePatch(ctx, b.client, b.bastion, func() error {
 		metav1.SetMetaDataAnnotation(&b.bastion.ObjectMeta, v1beta1constants.GardenerOperation, v1beta1constants.GardenerOperationReconcile)
 		metav1.SetMetaDataAnnotation(&b.bastion.ObjectMeta, v1beta1constants.GardenerTimestamp, b.Clock.Now().UTC().Format(time.RFC3339Nano))
@@ -109,8 +120,11 @@ func (b *Bastion) Deploy(ctx context.Context) error {
 			DefaultSpec: extensionsv1alpha1.DefaultSpec{
 				Type: b.Values.Provider,
 			},
-			UserData: userDataForBastion(b.sshKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys]),
-			Ingress:  b.ingressPolicies(),
+			UserData: userDataForBastion(
+				b.sshKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys],
+				b.sshHostKeypairSecret.Data[secretsutils.DataKeyRSAPrivateKey],
+			),
+			Ingress: b.ingressPolicies(),
 		}
 		return nil
 	})
@@ -148,12 +162,14 @@ func (b *Bastion) Destroy(ctx context.Context) error {
 		return fmt.Errorf("failed deleting bastion object %q: %w", client.ObjectKeyFromObject(b.bastion), err)
 	}
 
-	// Delete SSH key pair secret after the Bastion has been marked for deletion successfully.
-	if err := b.client.DeleteAllOf(ctx, &corev1.Secret{}, client.InNamespace(b.Values.Namespace), client.MatchingLabels{
-		secretsmanager.LabelKeyManagedBy: secretsmanager.LabelValueSecretsManager,
-		secretsmanager.LabelKeyName:      b.sshKeypairSecretName(),
-	}); err != nil {
-		return fmt.Errorf("failed deleting ssh keypair secret %q: %w", b.sshKeypairSecretName(), err)
+	// Delete SSH key pair secrets after the Bastion has been marked for deletion successfully.
+	for _, secretName := range []string{b.sshKeypairSecretName(), b.sshHostKeypairSecretName()} {
+		if err := b.client.DeleteAllOf(ctx, &corev1.Secret{}, client.InNamespace(b.Values.Namespace), client.MatchingLabels{
+			secretsmanager.LabelKeyManagedBy: secretsmanager.LabelValueSecretsManager,
+			secretsmanager.LabelKeyName:      secretName,
+		}); err != nil {
+			return fmt.Errorf("failed deleting ssh keypair secret %q: %w", secretName, err)
+		}
 	}
 
 	return nil
@@ -174,6 +190,10 @@ func (b *Bastion) WaitCleanup(ctx context.Context) error {
 
 func (b *Bastion) sshKeypairSecretName() string {
 	return fmt.Sprintf("bastion-%s-ssh-keypair", b.Values.Name)
+}
+
+func (b *Bastion) sshHostKeypairSecretName() string {
+	return fmt.Sprintf("bastion-%s-ssh-host-keypair", b.Values.Name)
 }
 
 func (b *Bastion) ingressPolicies() []extensionsv1alpha1.BastionIngressPolicy {
@@ -197,15 +217,19 @@ func (b *Bastion) ingressPolicies() []extensionsv1alpha1.BastionIngressPolicy {
 
 const bastionUser = "gardener"
 
-func userDataForBastion(sshPublicKey []byte) []byte {
+func userDataForBastion(sshPublicKey, hostPrivateKey []byte) []byte {
 	return fmt.Appendf(nil, `#!/bin/bash -eu
 
 id %[1]s || useradd %[1]s -mU
 mkdir -p /home/%[1]s/.ssh
 echo "%[2]s" > /home/%[1]s/.ssh/authorized_keys
 chown %[1]s:%[1]s /home/%[1]s/.ssh/authorized_keys
-systemctl start sshd || systemctl start ssh
-`, bastionUser, sshPublicKey)
+cat << 'EOF' | base64 -d > /etc/ssh/ssh_host_rsa_key
+%[3]s
+EOF
+chmod 0600 /etc/ssh/ssh_host_rsa_key
+systemctl restart sshd || systemctl restart ssh
+`, bastionUser, sshPublicKey, utils.EncodeBase64(hostPrivateKey))
 }
 
 // connect is called after the Bastion object has been reconciled successfully. It opens an SSH connection to the
@@ -225,6 +249,7 @@ func (b *Bastion) connect(ctx context.Context) error {
 	b.Connection, err = b.SSHDial(ctx, bastionAddr,
 		sshutils.WithUser(bastionUser),
 		sshutils.WithPrivateKeyBytes(b.sshKeypairSecret.Data[secretsutils.DataKeyRSAPrivateKey]),
+		sshutils.WithHostKey(b.sshHostKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys]),
 	)
 	if err != nil {
 		return fmt.Errorf("error connecting to bastion %q: %w", bastionAddr, err)
