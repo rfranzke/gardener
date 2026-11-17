@@ -58,6 +58,10 @@ const (
 	// SecretNameSSHKeyPair is a constant for the name of a Kubernetes secret object that contains the SSH key pair
 	// (public and private key) that can be used to SSH into the shoot nodes.
 	SecretNameSSHKeyPair = "ssh-keypair" // #nosec G101 -- No credential.
+	// SecretNameSSHHostKeyPair is a constant for the name of a Kubernetes secret object that contains the SSH host key
+	// pair injected into the first control plane machine during `gardenadm bootstrap`. The client pins the public key to
+	// authenticate the machine instead of trusting it on first use.
+	SecretNameSSHHostKeyPair = "ssh-host-keypair" // #nosec G101 -- No credential.
 	// SecretNameServiceAccountKey is a constant for the name of a Kubernetes secret object that contains a
 	// PEM-encoded private RSA or ECDSA key used by the Kube Controller Manager to sign service account tokens.
 	SecretNameServiceAccountKey = "service-account-key"

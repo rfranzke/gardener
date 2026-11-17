@@ -87,7 +87,19 @@ func (c *controlPlaneBootstrap) Deploy(ctx context.Context) error {
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameSSHKeyPair)
 	}
 
-	units, files, err := nodeinit.GardenadmConfig(string(sshKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys]))
+	sshHostKeypairSecret, err := c.secretsManager.Generate(ctx, &secretsutils.RSASecretConfig{
+		Name:       v1beta1constants.SecretNameSSHHostKeyPair,
+		Bits:       4096,
+		UsedForSSH: true,
+	})
+	if err != nil {
+		return fmt.Errorf("could not generate ssh host keypair: %w", err)
+	}
+
+	units, files, err := nodeinit.GardenadmConfig(
+		string(sshKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys]),
+		sshHostKeypairSecret.Data[secretsutils.DataKeyRSAPrivateKey],
+	)
 	if err != nil {
 		return err
 	}

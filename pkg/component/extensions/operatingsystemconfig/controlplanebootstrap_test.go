@@ -130,6 +130,12 @@ var _ = Describe("controlPlaneBootstrap", func() {
 					HaveField("Content.Inline.Data", "<<MACHINE_NAME>>"),
 					HaveField("Content.TransmitUnencoded", HaveValue(BeTrue())),
 				),
+				And(
+					HaveField("Path", "/etc/ssh/ssh_host_rsa_key"),
+					HaveField("Permissions", new(int32(0600))),
+					HaveField("Content.Inline.Encoding", "b64"),
+					HaveField("Content.Inline.Data", Not(BeEmpty())),
+				),
 			))
 
 			Expect(actual.Spec.Type).To(Equal("type1"))

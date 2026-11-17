@@ -53,10 +53,16 @@ func (b *GardenadmBotanist) ConnectToControlPlaneMachine(ctx context.Context) er
 		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameSSHKeyPair)
 	}
 
+	sshHostKeypairSecret, found := b.SecretsManager.Get(v1beta1constants.SecretNameSSHHostKeyPair)
+	if !found {
+		return fmt.Errorf("secret %q not found", v1beta1constants.SecretNameSSHHostKeyPair)
+	}
+
 	conn, err := sshutils.Dial(ctx, sshAddr,
 		sshutils.WithProxyConnection(b.Shoot.Components.Bastion.Connection),
 		sshutils.WithUser("gardener"),
 		sshutils.WithPrivateKeyBytes(sshKeypairSecret.Data[secretsutils.DataKeyRSAPrivateKey]),
+		sshutils.WithHostKey(sshHostKeypairSecret.Data[secretsutils.DataKeySSHAuthorizedKeys]),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to connect to machine %q at %q via bastion: %w", machine.Name, sshAddr, err)

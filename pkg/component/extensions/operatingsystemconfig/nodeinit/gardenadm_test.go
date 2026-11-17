@@ -16,6 +16,8 @@ import (
 var _ = Describe("Init", func() {
 	const sshPublicKey = "ssh-rsa foobar"
 
+	var hostPrivateKey = []byte("-----BEGIN RSA PRIVATE KEY-----\nfoobar\n-----END RSA PRIVATE KEY-----")
+
 	Describe("#GardenadmConfig", func() {
 		downloadScriptMatcher := extensionsv1alpha1.File{
 			Path:        "/var/lib/gardenadm/download.sh",
@@ -73,8 +75,15 @@ chmod +x "/opt/bin/gardenadm"
 
 		sshdEnsurerFileMatcher := HaveField("Path", "/var/lib/sshd-ensurer/run.sh")
 
+		hostKeyFileMatcher := And(
+			HaveField("Path", "/etc/ssh/ssh_host_rsa_key"),
+			HaveField("Permissions", HaveValue(Equal(int32(0600)))),
+			HaveField("Content.Inline.Encoding", "b64"),
+			HaveField("Content.Inline.Data", utils.EncodeBase64(hostPrivateKey)),
+		)
+
 		It("should return the correct units and files", func() {
-			units, files, err := GardenadmConfig(sshPublicKey)
+			units, files, err := GardenadmConfig(sshPublicKey, hostPrivateKey)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(units).To(ConsistOf(
@@ -98,6 +107,7 @@ chmod +x "/opt/bin/gardenadm"
 				sshdEnsurerFileMatcher,
 				downloadScriptMatcher,
 				machineNameFileMatcher,
+				hostKeyFileMatcher,
 			))
 		})
 	})

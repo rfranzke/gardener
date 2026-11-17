@@ -36,13 +36,14 @@ var (
 )
 
 // GardenadmConfig returns the init units and the files for the OperatingSystemConfig for the first control plane node
-// of a self-hosted shoot cluster.
+// of a self-hosted shoot cluster. The hostPrivateKey is written as the machine's SSH host key so that the client can
+// pin it instead of trusting it on first use.
 // ### !CAUTION! ###
 // Most cloud providers have a limit of 16 KB regarding the user-data that may be sent during VM creation.
 // The result of this operating system config is exactly the user-data that will be sent to the providers.
 // We must not exceed the 16 KB, so be careful when extending/changing anything in here.
 // ### !CAUTION! ###
-func GardenadmConfig(sshPublicKey string) ([]extensionsv1alpha1.Unit, []extensionsv1alpha1.File, error) {
+func GardenadmConfig(sshPublicKey string, hostPrivateKey []byte) ([]extensionsv1alpha1.Unit, []extensionsv1alpha1.File, error) {
 	var (
 		units []extensionsv1alpha1.Unit
 		files []extensionsv1alpha1.File
@@ -88,6 +89,18 @@ func GardenadmConfig(sshPublicKey string) ([]extensionsv1alpha1.Unit, []extensio
 					Data: machinecontroller.MachineNamePlaceholder,
 				},
 				TransmitUnencoded: new(true),
+			},
+		},
+		{
+			// Provision the SSH host key so that sshd adopts it on first boot instead of generating a random one.
+			// This allows the client to pin the corresponding public key and authenticate the machine.
+			Path:        "/etc/ssh/ssh_host_rsa_key",
+			Permissions: new(int32(0600)),
+			Content: extensionsv1alpha1.FileContent{
+				Inline: &extensionsv1alpha1.FileContentInline{
+					Encoding: "b64",
+					Data:     utils.EncodeBase64(hostPrivateKey),
+				},
 			},
 		},
 	}...)
